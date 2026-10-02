@@ -1,0 +1,144 @@
+.container {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  grid-template-rows: 64px 1fr;
+  height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.brand {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.scoreBoard {
+  display: flex;
+  gap: 24px;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.setNum {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  align-self: center;
+}
+
+.activeTeam {
+  color: var(--accent);
+}
+
+.status {
+  font-size: 1.2rem;
+}
+
+.connected { color: var(--success); }
+.disconnected { color: var(--danger); }
+
+.main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.sidebar {
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  padding: 24px;
+}
+
+.historyList {
+  list-style: none;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.historyItem {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.eventBuilder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.eventBuilder h2 {
+  font-size: 2rem;
+  color: var(--text-secondary);
+}
+
+.builderRow {
+  display: flex;
+  gap: 16px;
+}
+
+.builderRow span {
+  padding: 12px 24px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 1.2rem;
+  font-weight: 500;
+  min-width: 100px;
+  text-align: center;
+}
+
+.builderRow .empty {
+  color: var(--text-secondary);
+  border-style: dashed;
+}
+
+.builderRow .filled {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.savedFeedback {
+  position: absolute;
+  top: 40px;
+  background: var(--success);
+  color: #000;
+  padding: 8px 24px;
+  border-radius: 20px;
+  font-weight: 600;
+  animation: fadeOut 1s forwards;
+}
+
+@keyframes fadeOut {
+  0% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+@media (max-width: 768px) {
+  .container {
+    grid-template-columns: 1fr;
+    grid-template-rows: 64px 1fr 200px;
+  }
+  .sidebar {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}

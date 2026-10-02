@@ -1,0 +1,47 @@
+.container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.centerLabel {
+  position: absolute;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  transform: translate(-50%, -50%);
+}
+
+.segment {
+  position: absolute;
+  transform-origin: center;
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.15s ease-out;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  /* The inline style handles the translate, we need to counter center it */
+  margin-top: -20px;
+  margin-left: -40px; 
+}
+
+.segment.active {
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.05); /* overridden by inline style though, need to fix */
+  border-color: transparent;
+  box-shadow: 0 0 15px rgba(41, 151, 255, 0.4);
+}

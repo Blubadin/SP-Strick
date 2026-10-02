@@ -4,6 +4,8 @@ import { db, type Session, type SessionBookmark, type Player } from '../persiste
 import { EventValidator } from './EventValidator';
 import { hapticManager } from '../controller/HapticManager';
 import { calculatePointImpact } from '../sports/volleyball/volleyball.rules';
+import { recalculateScoreTimeline } from './scoreTimeline';
+import { audioFeedbackManager } from '../preferences/AudioFeedbackManager';
 
 export type ScoutState =
   | 'IDLE'
@@ -14,6 +16,37 @@ export type ScoutState =
   | 'SAVED'
   | 'PAUSED'
   | 'ERROR';
+
+export type ScoutFeedback = 'saved' | 'undo' | 'bookmark';
+export type ScoutSaveError = 'save-failed';
+
+interface RecalculatedSession {
+  events: ScoutingEvent[];
+  scoreA: number;
+  scoreB: number;
+}
+
+async function recalculatePersistedSession(sessionId: string): Promise<RecalculatedSession | null> {
+  const session = await db.sessions.get(sessionId);
+  if (!session) return null;
+
+  const storedEvents = await db.events.where('sessionId').equals(sessionId).sortBy('timestamp');
+  const events = recalculateScoreTimeline(storedEvents);
+  if (events.length > 0) await db.events.bulkPut(events);
+
+  const currentSetEvents = events.filter((event) => event.setNumber === (session.currentSet || 1));
+  const currentScore = currentSetEvents.at(-1)?.scoreAfter ?? { teamA: 0, teamB: 0 };
+  const scoreA = currentScore.teamA;
+  const scoreB = currentScore.teamB;
+
+  await db.sessions.update(sessionId, {
+    scoreA,
+    scoreB,
+    updatedAt: new Date().toISOString()
+  });
+
+  return { events, scoreA, scoreB };
+}
 
 interface ScoutStateStore {
   status: ScoutState;
@@ -37,8 +70,8 @@ interface ScoutStateStore {
 
   // Settings / UX
   autoScoreEnabled: boolean;
-  lastFeedback: string | null;
-  saveError: string | null;
+  lastFeedback: ScoutFeedback | null;
+  saveError: ScoutSaveError | null;
 
   // Actions
   setStatus: (status: ScoutState) => void;
@@ -207,11 +240,12 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
 
       // Provide haptic feedback if supported
       hapticManager.success(null);
+      audioFeedbackManager.playCommitTone();
 
       set({
         currentEvent: { teamId: state.activeTeam }, // clear buffer, preserve sticky team
         status: 'SAVED',
-        lastFeedback: `✓ ${state.activeTeam} / ${fullEvent.skill.toUpperCase()} / Z${fullEvent.originZone} / ${fullEvent.evaluation && fullEvent.evaluation > 0 ? '+1' : fullEvent.evaluation}`,
+        lastFeedback: 'saved',
         saveError: null,
         recentEvents: [fullEvent, ...state.recentEvents].slice(0, 6),
         scoreA: newScoreA,
@@ -228,7 +262,7 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
       console.error('Failed to commit event:', err);
       set({
         status: 'ERROR',
-        saveError: 'Database save failed. Please retry.'
+        saveError: 'save-failed'
       });
       hapticManager.warning(null);
     }
@@ -239,36 +273,38 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
    */
   undoLastEvent: async () => {
     const state = get();
-    if (!state.sessionId || state.recentEvents.length === 0) return;
-
-    const lastEvent = state.recentEvents[0];
+    if (!state.sessionId) return;
 
     try {
-      const restoredScoreA = lastEvent.scoreBefore?.teamA ?? state.scoreA;
-      const restoredScoreB = lastEvent.scoreBefore?.teamB ?? state.scoreB;
+      const resultHolder: { value: RecalculatedSession | null } = { value: null };
 
       await db.transaction('rw', [db.events, db.sessions], async () => {
+        const latestEvents = await db.events
+          .where('sessionId')
+          .equals(state.sessionId as string)
+          .reverse()
+          .sortBy('timestamp');
+        const lastEvent = latestEvents[0];
+        if (!lastEvent) return;
         await db.events.delete(lastEvent.id);
-        if (state.sessionId) {
-          await db.sessions.update(state.sessionId, {
-            scoreA: restoredScoreA,
-            scoreB: restoredScoreB,
-            updatedAt: new Date().toISOString()
-          });
-        }
+        resultHolder.value = await recalculatePersistedSession(state.sessionId as string);
       });
 
+      const result = resultHolder.value;
+      if (!result) return;
+      const remainingEvents = result.events;
+
       set({
-        recentEvents: state.recentEvents.slice(1),
-        scoreA: restoredScoreA,
-        scoreB: restoredScoreB,
+        recentEvents: remainingEvents.slice(-6).reverse(),
+        scoreA: result.scoreA,
+        scoreB: result.scoreB,
         currentEvent: { teamId: state.activeTeam },
-        lastFeedback: '↶ Last event removed',
+        lastFeedback: 'undo',
         status: 'IDLE'
       });
 
       setTimeout(() => {
-        if (get().lastFeedback === '↶ Last event removed') {
+        if (get().lastFeedback === 'undo') {
           set({ lastFeedback: null });
         }
       }, 1200);
@@ -278,34 +314,48 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
   },
 
   editEvent: async (eventId, changes) => {
-    const event = await db.events.get(eventId);
-    if (!event) return;
+    let sessionId: string | undefined;
+    const resultHolder: { value: RecalculatedSession | null } = { value: null };
 
-    const updated = { ...event, ...changes };
-    await db.events.put(updated);
+    await db.transaction('rw', [db.events, db.sessions], async () => {
+      const event = await db.events.get(eventId);
+      if (!event) return;
+      sessionId = event.sessionId;
+      await db.events.put({ ...event, ...changes, id: event.id, sessionId: event.sessionId });
+      resultHolder.value = await recalculatePersistedSession(event.sessionId);
+    });
 
-    // Refresh recent events if applicable
-    const s = get();
-    if (s.sessionId) {
-      const recent = await db.events
-        .where('sessionId')
-        .equals(s.sessionId)
-        .reverse()
-        .sortBy('timestamp');
-      set({ recentEvents: recent.slice(0, 6) });
+    const state = get();
+    const result = resultHolder.value;
+    if (result && sessionId === state.sessionId) {
+      set({
+        recentEvents: result.events.slice(-6).reverse(),
+        scoreA: result.scoreA,
+        scoreB: result.scoreB
+      });
     }
   },
 
   deleteEvent: async (eventId) => {
-    await db.events.delete(eventId);
-    const s = get();
-    if (s.sessionId) {
-      const recent = await db.events
-        .where('sessionId')
-        .equals(s.sessionId)
-        .reverse()
-        .sortBy('timestamp');
-      set({ recentEvents: recent.slice(0, 6) });
+    let sessionId: string | undefined;
+    const resultHolder: { value: RecalculatedSession | null } = { value: null };
+
+    await db.transaction('rw', [db.events, db.sessions], async () => {
+      const event = await db.events.get(eventId);
+      if (!event) return;
+      sessionId = event.sessionId;
+      await db.events.delete(eventId);
+      resultHolder.value = await recalculatePersistedSession(event.sessionId);
+    });
+
+    const state = get();
+    const result = resultHolder.value;
+    if (result && sessionId === state.sessionId) {
+      set({
+        recentEvents: result.events.slice(-6).reverse(),
+        scoreA: result.scoreA,
+        scoreB: result.scoreB
+      });
     }
   },
 
@@ -351,10 +401,8 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
    */
   restoreActiveSession: async () => {
     const activeSessions = await db.sessions
-      .where('active')
-      .equals(1 as any)
-      .or('active')
-      .equals(true as any)
+      .where('status')
+      .equals('active')
       .reverse()
       .sortBy('updatedAt');
 
@@ -364,7 +412,7 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
 
     // Fallback: check most recently updated session
     const latest = await db.sessions.orderBy('updatedAt').reverse().first();
-    if (latest && latest.active !== false) {
+    if (latest && latest.status === 'active') {
       return await get().loadSession(latest.id);
     }
 
@@ -389,6 +437,7 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
       scoreA: 0,
       scoreB: 0,
       scoutingProfileId: 'volleyball_basic',
+      status: 'active',
       active: true
     };
 
@@ -440,11 +489,25 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
     if (!s.sessionId) return;
 
     await db.sessions.update(s.sessionId, {
+      status: 'ended',
       active: false,
       updatedAt: new Date().toISOString()
     });
 
-    set({ status: 'IDLE' });
+    set({
+      status: 'IDLE',
+      sessionId: null,
+      matchId: null,
+      sessionName: '',
+      currentSet: 1,
+      scoreA: 0,
+      scoreB: 0,
+      activeTeam: 'A',
+      selectedPlayerId: undefined,
+      currentEvent: {},
+      recentEvents: [],
+      bookmarks: []
+    });
   },
 
   addBookmark: async (label = 'Moment') => {
@@ -461,11 +524,11 @@ export const useScoutStore = create<ScoutStateStore>((set, get) => ({
     await db.bookmarks.add(bookmark);
     set((state) => ({
       bookmarks: [bookmark, ...state.bookmarks],
-      lastFeedback: `🔖 Bookmark added`
+      lastFeedback: 'bookmark'
     }));
 
     setTimeout(() => {
-      if (get().lastFeedback === '🔖 Bookmark added') {
+      if (get().lastFeedback === 'bookmark') {
         set({ lastFeedback: null });
       }
     }, 1000);

@@ -4,6 +4,11 @@
 
 class HapticManager {
   private enabled: boolean = true;
+  private gamepadResolver: () => Gamepad | null = () => null;
+
+  public setGamepadResolver(resolver: () => Gamepad | null): void {
+    this.gamepadResolver = resolver;
+  }
 
   public setEnabled(enabled: boolean): void {
     this.enabled = enabled;
@@ -13,19 +18,31 @@ class HapticManager {
     return this.enabled;
   }
 
+  public isAvailable(gamepad?: Gamepad | null): boolean {
+    const target = this.resolveGamepad(gamepad);
+    if (!target?.connected) return false;
+    const candidate = target as unknown as {
+      vibrationActuator?: { playEffect?: unknown };
+      hapticActuators?: Array<{ pulse?: unknown }>;
+    };
+    return typeof candidate.vibrationActuator?.playEffect === 'function' ||
+      Boolean(candidate.hapticActuators?.some((actuator) => typeof actuator.pulse === 'function'));
+  }
+
   /**
    * Safe execution of dual-rumble vibration effect.
    */
   public async pulse(
-    gamepad: Gamepad | null,
+    gamepad: Gamepad | null = null,
     durationMs: number = 80,
     weakMagnitude: number = 0.3,
     strongMagnitude: number = 0.3
   ): Promise<void> {
-    if (!this.enabled || !gamepad) return;
+    const target = this.resolveGamepad(gamepad);
+    if (!this.enabled || !target?.connected) return;
 
     // Feature detection for vibrationActuator or hapticActuators
-    const gpWithVibe = gamepad as unknown as {
+    const gpWithVibe = target as unknown as {
       vibrationActuator?: {
         playEffect: (
           type: string,
@@ -56,22 +73,31 @@ class HapticManager {
   /**
    * Extremely light tick when rotating through radial sectors
    */
-  public tick(gamepad: Gamepad | null): void {
+  public tick(gamepad: Gamepad | null = null): void {
     this.pulse(gamepad, 30, 0.15, 0.05);
   }
 
   /**
    * Confirmation pulse when an event or action commits
    */
-  public success(gamepad: Gamepad | null): void {
+  public success(gamepad: Gamepad | null = null): void {
     this.pulse(gamepad, 90, 0.4, 0.3);
   }
 
   /**
    * Distinct warning pulse on cancel or undo
    */
-  public warning(gamepad: Gamepad | null): void {
+  public warning(gamepad: Gamepad | null = null): void {
     this.pulse(gamepad, 120, 0.5, 0.2);
+  }
+
+  private resolveGamepad(gamepad?: Gamepad | null): Gamepad | null {
+    if (gamepad) return gamepad;
+    try {
+      return this.gamepadResolver();
+    } catch {
+      return null;
+    }
   }
 }
 

@@ -24,7 +24,44 @@ export interface Session {
   scoreA: number;
   scoreB: number;
   scoutingProfileId?: string;
-  active: boolean; // true if match is in progress
+  status: 'active' | 'ended';
+  /** Kept in sync for compatibility with clients that still query the v2 field. */
+  active?: boolean;
+}
+
+type LegacySessionRecord = Record<string, unknown>;
+
+/** Normalize old session rows while retaining all fields from the stored record. */
+export function migrateSessionForV3(session: LegacySessionRecord): LegacySessionRecord & {
+  updatedAt: string;
+  teamAPlayers: Player[];
+  teamBPlayers: Player[];
+  scoutingProfileId: string;
+  status: 'active' | 'ended';
+  active: boolean;
+} {
+  const status =
+    session.status === 'active' || session.status === 'ended'
+      ? session.status
+      : session.active === false || session.active === 0
+        ? 'ended'
+        : 'active';
+  const createdAt = typeof session.createdAt === 'string' && session.createdAt ? session.createdAt : undefined;
+  const updatedAt =
+    typeof session.updatedAt === 'string' && session.updatedAt ? session.updatedAt : createdAt;
+
+  return {
+    ...session,
+    updatedAt: updatedAt || new Date(0).toISOString(),
+    teamAPlayers: Array.isArray(session.teamAPlayers) ? (session.teamAPlayers as Player[]) : [],
+    teamBPlayers: Array.isArray(session.teamBPlayers) ? (session.teamBPlayers as Player[]) : [],
+    scoutingProfileId:
+      typeof session.scoutingProfileId === 'string' && session.scoutingProfileId
+        ? session.scoutingProfileId
+        : 'volleyball_basic',
+    status,
+    active: status === 'active'
+  };
 }
 
 export interface SessionBookmark {
@@ -63,6 +100,21 @@ export class SPStickDatabase extends Dexie {
       bookmarks: 'id, sessionId, timestamp',
       settings: 'key'
     });
+
+    // Schema Version 3: normalized session status and safe legacy defaults.
+    this.version(3)
+      .stores({
+        events: 'id, sessionId, matchId, timestamp, teamId, skill',
+        sessions: 'id, createdAt, updatedAt, status',
+        customProfiles: 'id, name, type',
+        bookmarks: 'id, sessionId, timestamp',
+        settings: 'key'
+      })
+      .upgrade((transaction) =>
+        transaction.table('sessions').toCollection().modify((session) => {
+          Object.assign(session, migrateSessionForV3(session as LegacySessionRecord));
+        })
+      );
   }
 }
 

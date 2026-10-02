@@ -1,14 +1,20 @@
 import { useControllerStore } from './ControllerStore';
-import { ButtonStateMachine } from './ButtonStateMachine';
+import { ButtonStateMachine, hasButtonFrameEdges } from './ButtonStateMachine';
 import { applyDeadzone } from './StickNormalizer';
 import { intentDispatcher } from './ControllerIntent';
 import { hapticManager } from './HapticManager';
+import { rawGamepadSnapshotStore } from './RawGamepadSnapshot';
+import type { AxisState } from './ControllerTypes';
 
 let pollingFrame: number | null = null;
 const buttonStateMachine = new ButtonStateMachine();
+let lastLeftStick: AxisState = { x: 0, y: 0, magnitude: 0, angle: 0 };
+let lastRightStick: AxisState = { x: 0, y: 0, magnitude: 0, angle: 0 };
+let lastControllerKey: string | null = null;
 
-let lastLeftAngle = 0;
-let lastLeftMag = 0;
+function stickSignificantlyChanged(current: AxisState, previous: AxisState): boolean {
+  return Math.abs(current.x - previous.x) > 0.02 || Math.abs(current.y - previous.y) > 0.02;
+}
 
 export function startGamepadPolling(): void {
   if (pollingFrame !== null) return;
@@ -21,6 +27,16 @@ export function startGamepadPolling(): void {
       const gp = gamepads[state.index];
 
       if (gp && gp.connected) {
+        rawGamepadSnapshotStore.publish(gp);
+
+        const controllerKey = `${gp.index}:${gp.id}:${profile.id}`;
+        if (controllerKey !== lastControllerKey) {
+          buttonStateMachine.reset();
+          lastLeftStick = { x: 0, y: 0, magnitude: 0, angle: 0 };
+          lastRightStick = { x: 0, y: 0, magnitude: 0, angle: 0 };
+          lastControllerKey = controllerKey;
+        }
+
         // 1. Process Buttons with edge detection
         const { buttons, hasChanged: buttonsChanged } = buttonStateMachine.update(
           gp.buttons,
@@ -46,19 +62,15 @@ export function startGamepadPolling(): void {
             )
           : { x: 0, y: 0, magnitude: 0, angle: 0 };
 
-        // 3. Stick movement significance check (to prevent 60fps renders when idle)
-        const stickSignificantlyChanged =
-          Math.abs(leftStick.magnitude - lastLeftMag) > 0.02 ||
-          (leftStick.magnitude > 0.1 && Math.abs(leftStick.angle - lastLeftAngle) > 2) ||
-          (lastLeftMag > 0 && leftStick.magnitude === 0);
+        // Track both sticks locally; only the selected controller snapshot is updated.
+        const leftStickChanged = stickSignificantlyChanged(leftStick, lastLeftStick);
+        const rightStickChanged = stickSignificantlyChanged(rightStick, lastRightStick);
 
-        if (stickSignificantlyChanged) {
-          lastLeftMag = leftStick.magnitude;
-          lastLeftAngle = leftStick.angle;
-        }
+        if (leftStickChanged) lastLeftStick = leftStick;
+        if (rightStickChanged) lastRightStick = rightStick;
 
-        // 4. Update React store ONLY when there is a meaningful state change
-        if (buttonsChanged || stickSignificantlyChanged) {
+        // Frame flags are one-poll events; publish one clearing snapshot after each edge.
+        if (buttonsChanged || leftStickChanged || rightStickChanged || hasButtonFrameEdges(state.buttons)) {
           updateState({
             buttons,
             leftStick,
@@ -119,7 +131,8 @@ export function startGamepadPolling(): void {
         }
       } else {
         // Disconnected mid-polling
-        buttonStateMachine.reset();
+        resetPollerState();
+        rawGamepadSnapshotStore.reset();
       }
     }
 
@@ -142,6 +155,7 @@ export function stopGamepadPolling(): void {
  */
 export function resetPollerState(): void {
   buttonStateMachine.reset();
-  lastLeftAngle = 0;
-  lastLeftMag = 0;
+  lastLeftStick = { x: 0, y: 0, magnitude: 0, angle: 0 };
+  lastRightStick = { x: 0, y: 0, magnitude: 0, angle: 0 };
+  lastControllerKey = null;
 }

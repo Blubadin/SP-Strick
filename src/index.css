@@ -1,32 +1,81 @@
 :root {
-  --bg-primary: #0B0D10;
-  --bg-secondary: #12151A;
-  --surface: #181C22;
-  --surface-hover: #20252D;
+  color-scheme: dark;
+  --bg-0: #0B0D10;
+  --bg-1: #12151A;
+  --bg-2: #181C22;
+  --surface-0: #14181E;
+  --surface-1: #181C22;
+  --surface-raised: #20252D;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-normal: rgba(255, 255, 255, 0.11);
+  --border-focus: #2997FF;
   --text-primary: #F5F5F7;
   --text-secondary: #9CA3AF;
-  --border: rgba(255,255,255,0.10);
+  --text-tertiary: #737C89;
   --accent: #2997FF;
-  --success: #34C759;
-  --danger: #FF3B30;
-  
+  --accent-hover: #57ACFF;
+  --accent-soft: rgba(41, 151, 255, 0.14);
+  --success: #46C486;
+  --warning: #E9B65D;
+  --danger: #F06A65;
+  --radius-xs: 4px;
+  --radius-sm: 7px;
+  --radius-md: 11px;
+  --radius-lg: 15px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --motion-fast: 120ms;
+  --motion-normal: 180ms;
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
+
+  /* Compatibility aliases for the live scout while the rest of the UI uses semantic tokens. */
+  --bg-primary: var(--bg-0);
+  --bg-secondary: var(--bg-1);
+  --surface: var(--surface-1);
+  --surface-hover: var(--surface-raised);
+  --border: var(--border-normal);
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--bg-0);
+  scroll-behavior: smooth;
 }
 
 body {
-  background-color: var(--bg-primary);
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg-0);
   color: var(--text-primary);
   font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden; /* Prevent scrolling during live scout */
-  user-select: none; /* Prevent accidental text selection */
+}
+
+button,
+input,
+select,
+textarea {
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
 }
 
 a {
@@ -34,10 +83,32 @@ a {
   text-decoration: none;
 }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: inherit;
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(41, 151, 255, 0.3);
+  color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }

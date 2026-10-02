@@ -1,4 +1,5 @@
 import type { ControllerProfile, ControllerType, SemanticControl } from './ControllerTypes';
+import { ALL_SEMANTIC_CONTROLS } from './ButtonStateMachine';
 
 export const STANDARD_MAPPING: Record<SemanticControl, number> = {
   FACE_SOUTH: 0,
@@ -19,7 +20,19 @@ export const STANDARD_MAPPING: Record<SemanticControl, number> = {
   DPAD_RIGHT: 15
 };
 
-export const STANDARD_PROFILE: ControllerProfile = {
+function immutableProfile(profile: ControllerProfile): ControllerProfile {
+  return Object.freeze({
+    ...profile,
+    detectedIdPatterns: profile.detectedIdPatterns
+      ? Object.freeze([...profile.detectedIdPatterns]) as unknown as string[]
+      : undefined,
+    buttons: Object.freeze({ ...profile.buttons }),
+    leftStick: Object.freeze({ ...profile.leftStick }),
+    rightStick: profile.rightStick ? Object.freeze({ ...profile.rightStick }) : undefined
+  }) as ControllerProfile;
+}
+
+export const STANDARD_PROFILE: ControllerProfile = immutableProfile({
   id: 'profile_standard',
   name: 'Standard Gamepad',
   type: 'standard',
@@ -39,9 +52,9 @@ export const STANDARD_PROFILE: ControllerProfile = {
     deadzone: 0.20
   },
   builtIn: true
-};
+});
 
-export const XBOX_PROFILE: ControllerProfile = {
+export const XBOX_PROFILE: ControllerProfile = immutableProfile({
   id: 'profile_xbox',
   name: 'Xbox Wireless Controller',
   type: 'xbox',
@@ -62,9 +75,9 @@ export const XBOX_PROFILE: ControllerProfile = {
     deadzone: 0.20
   },
   builtIn: true
-};
+});
 
-export const DUALSENSE_PROFILE: ControllerProfile = {
+export const DUALSENSE_PROFILE: ControllerProfile = immutableProfile({
   id: 'profile_dualsense',
   name: 'PlayStation DualSense',
   type: 'dualsense',
@@ -85,9 +98,9 @@ export const DUALSENSE_PROFILE: ControllerProfile = {
     deadzone: 0.18
   },
   builtIn: true
-};
+});
 
-export const DUALSHOCK_PROFILE: ControllerProfile = {
+export const DUALSHOCK_PROFILE: ControllerProfile = immutableProfile({
   id: 'profile_dualshock',
   name: 'PlayStation DualShock 4',
   type: 'dualshock',
@@ -108,14 +121,84 @@ export const DUALSHOCK_PROFILE: ControllerProfile = {
     deadzone: 0.18
   },
   builtIn: true
-};
+});
 
-export const BUILT_IN_PROFILES: ControllerProfile[] = [
+export const BUILT_IN_PROFILES: ControllerProfile[] = Object.freeze([
   XBOX_PROFILE,
   DUALSENSE_PROFILE,
   DUALSHOCK_PROFILE,
   STANDARD_PROFILE
-];
+]) as unknown as ControllerProfile[];
+
+export interface ControllerProfileValidation {
+  valid: boolean;
+  errors: string[];
+}
+
+const semanticControlSet = new Set<string>(ALL_SEMANTIC_CONTROLS);
+const controllerTypes: ControllerType[] = ['xbox', 'dualsense', 'dualshock', 'standard', 'custom'];
+
+/** Validates custom profile values before they can be stored or used for input. */
+export function validateControllerProfile(profile: unknown): ControllerProfileValidation {
+  const errors: string[] = [];
+  if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+    return { valid: false, errors: ['Profile must be an object.'] };
+  }
+  const candidate = profile as Partial<ControllerProfile>;
+  const ownerByButtonIndex = new Map<number, string>();
+
+  if (!candidate.buttons || typeof candidate.buttons !== 'object' || Array.isArray(candidate.buttons)) {
+    errors.push('Profile buttons must be an object.');
+  } else {
+    for (const [control, index] of Object.entries(candidate.buttons)) {
+      if (!semanticControlSet.has(control)) {
+        errors.push(`${control} is not a supported semantic control.`);
+      }
+      if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
+        errors.push(`${control} must use a non-negative integer button index.`);
+        continue;
+      }
+      const existing = ownerByButtonIndex.get(index);
+      if (existing) {
+        errors.push(`Button index ${index} is assigned to both ${existing} and ${control}.`);
+      } else {
+        ownerByButtonIndex.set(index, control);
+      }
+    }
+  }
+
+  const stickConfigs = [candidate.leftStick, candidate.rightStick];
+  for (const stick of stickConfigs) {
+    if (!stick) continue;
+    if (!Number.isInteger(stick.xAxis) || stick.xAxis < 0 || !Number.isInteger(stick.yAxis) || stick.yAxis < 0) {
+      errors.push('Stick axes must use non-negative integer indexes.');
+    }
+    if (typeof stick.invertX !== 'boolean' || typeof stick.invertY !== 'boolean') {
+      errors.push('Stick inversion values must be booleans.');
+    }
+    if (!Number.isFinite(stick.deadzone) || stick.deadzone < 0 || stick.deadzone >= 1) {
+      errors.push('Stick deadzone must be between 0 and 1.');
+    }
+  }
+
+  if (typeof candidate.leftStick !== 'object' || candidate.leftStick === null) {
+    errors.push('Left stick configuration is required.');
+  }
+  if (!controllerTypes.includes(candidate.type as ControllerType)) {
+    errors.push('Profile type is invalid.');
+  }
+  if (typeof candidate.builtIn !== 'boolean') errors.push('Profile builtIn flag must be a boolean.');
+  if (
+    candidate.detectedIdPatterns !== undefined &&
+    (!Array.isArray(candidate.detectedIdPatterns) || candidate.detectedIdPatterns.some((pattern) => typeof pattern !== 'string'))
+  ) {
+    errors.push('Detected id patterns must be an array of strings.');
+  }
+  if (typeof candidate.id !== 'string' || !candidate.id.trim()) errors.push('Profile id is required.');
+  if (typeof candidate.name !== 'string' || !candidate.name.trim()) errors.push('Profile name is required.');
+
+  return { valid: errors.length === 0, errors };
+}
 
 /**
  * Detects the most appropriate controller profile given gamepad ID and mapping.

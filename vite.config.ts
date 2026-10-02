@@ -7,7 +7,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['branding/sp-stick-logo.jpg'],
+      includeAssets: [
+        'branding/sp-stick-logo.jpg',
+        'branding/pwa-192.png',
+        'branding/pwa-512.png',
+        'branding/pwa-maskable-512.png'
+      ],
       manifest: {
         name: 'SP Stick',
         short_name: 'SP Stick',
@@ -17,14 +22,22 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: 'branding/sp-stick-logo.jpg',
+            src: 'branding/pwa-192.png',
             sizes: '192x192',
-            type: 'image/jpeg'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
-            src: 'branding/sp-stick-logo.jpg',
+            src: 'branding/pwa-512.png',
             sizes: '512x512',
-            type: 'image/jpeg'
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'branding/pwa-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }

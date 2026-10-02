@@ -1,343 +1,209 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ArrowDownToLine, ArrowLeft, Check, Pencil, Trash2, X } from 'lucide-react';
+import AppShell from '../components/AppShell';
 import { db, type Session } from '../core/persistence/database';
 import type { ScoutingEvent } from '../core/scouting/ScoutingEvent';
 import { useScoutStore } from '../core/scouting/ScoutStore';
-import styles from './CommonPage.module.css';
+import { jsonForEvents, csvForEvents, resolvePlayer, sessionExportFilename } from './reviewData';
+import styles from './ReviewPage.module.css';
+
+type EventDraft = Pick<ScoutingEvent, 'teamId' | 'playerId' | 'skill' | 'originZone' | 'evaluation' | 'pointImpact'>;
+
+const downloadText = (text: string, filename: string, type: string) => {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 export default function ReviewPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const scout = useScoutStore();
-
+  const liveSessionId = useScoutStore((state) => state.sessionId);
+  const editEvent = useScoutStore((state) => state.editEvent);
+  const deleteEvent = useScoutStore((state) => state.deleteEvent);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>(scout.sessionId || '');
+  const [selectedSessionId, setSelectedSessionId] = useState(liveSessionId ?? '');
   const [events, setEvents] = useState<ScoutingEvent[]>([]);
-  const [filterTeam, setFilterTeam] = useState<string>('ALL');
-  const [filterSkill, setFilterSkill] = useState<string>('ALL');
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [editEvaluation, setEditEvaluation] = useState<number>(0);
+  const [teamFilter, setTeamFilter] = useState('ALL');
+  const [skillFilter, setSkillFilter] = useState('ALL');
+  const [editing, setEditing] = useState<ScoutingEvent | null>(null);
+  const [draft, setDraft] = useState<EventDraft | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  // 1. Load Sessions
   useEffect(() => {
-    db.sessions.orderBy('updatedAt').reverse().toArray().then((sessList) => {
-      setSessions(sessList);
-      if (!selectedSessionId && sessList.length > 0) {
-        setSelectedSessionId(sessList[0].id);
-      }
+    let mounted = true;
+    void db.sessions.orderBy('updatedAt').reverse().toArray().then((list) => {
+      if (!mounted) return;
+      setSessions(list);
+      setSelectedSessionId((current) => current || liveSessionId || list[0]?.id || '');
     });
-  }, [selectedSessionId]);
+    return () => { mounted = false; };
+  }, [liveSessionId]);
 
-  // 2. Load Session Events
   useEffect(() => {
-    if (selectedSessionId) {
-      db.events
-        .where('sessionId')
-        .equals(selectedSessionId)
-        .reverse()
-        .sortBy('timestamp')
-        .then(setEvents);
-    } else {
-      setEvents([]);
+    let mounted = true;
+    if (!selectedSessionId) {
+      return () => { mounted = false; };
     }
+    void db.events.where('sessionId').equals(selectedSessionId).sortBy('timestamp').then((list) => {
+      if (mounted) setEvents(list);
+    });
+    return () => { mounted = false; };
   }, [selectedSessionId]);
 
-  const activeSession = useMemo(
-    () => sessions.find((s) => s.id === selectedSessionId),
-    [sessions, selectedSessionId]
-  );
+  const session = sessions.find((item) => item.id === selectedSessionId);
+  const filteredEvents = useMemo(() => events.filter((event) =>
+    (teamFilter === 'ALL' || event.teamId === teamFilter) &&
+    (skillFilter === 'ALL' || event.skill === skillFilter)
+  ), [events, teamFilter, skillFilter]);
+  const eventCount = events.length;
 
-  // 3. Filtered Events
-  const filteredEvents = useMemo(() => {
-    return events.filter((ev) => {
-      if (filterTeam !== 'ALL' && ev.teamId !== filterTeam) return false;
-      if (filterSkill !== 'ALL' && ev.skill !== filterSkill) return false;
-      return true;
-    });
-  }, [events, filterTeam, filterSkill]);
-
-  // 4. Export Handlers
-  const handleExportJSON = () => {
-    if (!activeSession) return;
-    const blob = new Blob([JSON.stringify(events, null, 2)], {
-      type: 'application/json'
-    });
-    const url = URL.createObjectURL(blob);
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const safeName = `${activeSession.teamA}-vs-${activeSession.teamB}`
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, '-');
-    const filename = `sp-stick-volleyball-${safeName}-${dateStr}.json`;
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportCSV = () => {
-    if (!activeSession) return;
-    const headers = [
-      'timestamp',
-      'setNumber',
-      'teamId',
-      'playerId',
-      'skill',
-      'subSkill',
-      'originZone',
-      'targetZone',
-      'evaluation',
-      'pointImpact',
-      'scoreBeforeA',
-      'scoreBeforeB',
-      'scoreAfterA',
-      'scoreAfterB',
-      'inputSource'
-    ];
-
-    const rows = events.map((e) => [
-      new Date(e.timestamp).toISOString(),
-      e.setNumber,
-      e.teamId,
-      e.playerId || '',
-      e.skill,
-      e.subSkill || '',
-      e.originZone ?? '',
-      e.targetZone ?? '',
-      e.evaluation ?? '',
-      e.pointImpact || '',
-      e.scoreBefore?.teamA ?? '',
-      e.scoreBefore?.teamB ?? '',
-      e.scoreAfter?.teamA ?? '',
-      e.scoreAfter?.teamB ?? '',
-      e.inputSource
-    ]);
-
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const safeName = `${activeSession.teamA}-vs-${activeSession.teamB}`
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, '-');
-    const filename = `sp-stick-volleyball-${safeName}-${dateStr}.csv`;
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDeleteEvent = async (id: string) => {
-    await scout.deleteEvent(id);
-    setEvents((prev) => prev.filter((e) => e.id !== id));
-  };
-
-  const handleSaveEdit = async (id: string) => {
-    await scout.editEvent(id, { evaluation: editEvaluation as any });
-    setEvents((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, evaluation: editEvaluation } : e))
+  const exportEvents = (format: 'csv' | 'json') => {
+    if (!session) return;
+    const filename = sessionExportFilename(session, format);
+    downloadText(
+      format === 'csv' ? csvForEvents(events, session) : jsonForEvents(events),
+      filename,
+      format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8'
     );
-    setEditingEventId(null);
   };
+
+  const beginEdit = (event: ScoutingEvent) => {
+    setEditing(event);
+    setDraft({
+      teamId: event.teamId,
+      playerId: event.playerId,
+      skill: event.skill,
+      originZone: event.originZone,
+      evaluation: event.evaluation ?? 0,
+      pointImpact: event.pointImpact ?? null
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editing || !draft) return;
+    setSaving(true);
+    try {
+      await editEvent(editing.id, draft);
+      const [refreshed, refreshedSessions] = await Promise.all([
+        db.events.where('sessionId').equals(selectedSessionId).sortBy('timestamp'),
+        db.sessions.orderBy('updatedAt').reverse().toArray()
+      ]);
+      setEvents(refreshed);
+      setSessions(refreshedSessions);
+      setEditing(null);
+      setDraft(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeEvent = async (event: ScoutingEvent) => {
+    const player = resolvePlayer(session, event);
+    if (!window.confirm(t('review.delete_confirm', 'Delete this event? This will update the match score history.') + `\n${t(`skill.${event.skill}`, event.skill)} · ${player}`)) return;
+    await deleteEvent(event.id);
+    setEvents((current) => current.filter((item) => item.id !== event.id));
+    setSessions(await db.sessions.orderBy('updatedAt').reverse().toArray());
+  };
+
+  const teamName = (id: string) => id === 'A' ? session?.teamA ?? t('team.a') : session?.teamB ?? t('team.b');
+  const options = [
+    ['attack', 'skill.attack'], ['block', 'skill.block'], ['set', 'skill.set'],
+    ['receive', 'skill.receive'], ['serve', 'skill.serve'], ['dig', 'skill.dig'], ['freeball', 'skill.freeball'], ['other', 'skill.other']
+  ];
+  const players = draft?.teamId === 'A' ? session?.teamAPlayers ?? [] : session?.teamBPlayers ?? [];
 
   return (
-    <div className={styles.container} style={{ alignItems: 'flex-start', paddingTop: '32px' }}>
-      <div className={styles.card} style={{ maxWidth: '1000px', width: '94%' }}>
-        {/* Header */}
-        <div className={styles.headerRow}>
+    <AppShell>
+      <div className={styles.page}>
+        <header className={styles.header}>
           <div>
-            <h1>{t('review.title', 'Event Review & History')}</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-              Filter, edit, and export session analytics
-            </p>
+            <p className={styles.eyebrow}>{t('review.eyebrow', 'MATCH RECORD')}</p>
+            <h1>{t('review.title', 'Event Review')}</h1>
+            <p className={styles.description}>{t('review.description', 'Review the recorded actions, adjust event details, and export the match record.')}</p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {scout.sessionId && (
-              <button
-                onClick={() => navigate('/scout')}
-                className={styles.primaryBtn}
-                style={{ width: 'auto', marginTop: 0, padding: '8px 16px', fontSize: '0.9rem' }}
-              >
-                Back to Live Scout
-              </button>
-            )}
-            <button
-              onClick={() => navigate('/')}
-              className={styles.secondaryBtn}
-              style={{ width: 'auto', marginTop: 0, padding: '8px 16px', fontSize: '0.9rem' }}
-            >
-              {t('common.home', 'Home')}
-            </button>
+          <div className={styles.headerActions}>
+            {liveSessionId && <button type="button" className={styles.button} onClick={() => navigate('/scout')}><ArrowLeft size={16} />{t('review.back_to_match', 'Back to live match')}</button>}
           </div>
-        </div>
+        </header>
 
-        {/* Session Selector & Filters */}
-        <div className={styles.filterBar}>
-          <div className={styles.formGroup} style={{ flex: 2, minWidth: '220px', marginBottom: 0 }}>
-            <label style={{ fontSize: '0.75rem' }}>Selected Match Session</label>
-            <select
-              className={styles.input}
-              value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
-            >
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({new Date(s.createdAt).toLocaleDateString()}) {s.active ? '• Active' : ''}
-                </option>
-              ))}
+        <section className={styles.summary} aria-label={t('review.summary', 'Match summary')}>
+          <label className={styles.sessionSelect}>
+            <span>{t('review.match', 'Match')}</span>
+            <select value={selectedSessionId} onChange={(event) => setSelectedSessionId(event.target.value)}>
+              {!sessions.length && <option value="">{t('review.no_sessions', 'No saved matches')}</option>}
+              {sessions.map((item) => <option key={item.id} value={item.id}>{item.teamA} vs {item.teamB} · {new Date(item.createdAt).toLocaleDateString()}</option>)}
             </select>
+          </label>
+          <div className={styles.scoreSummary}>
+            <span className={styles.summaryLabel}>{t('review.final_score', 'Current set score')}</span>
+            <strong>{session?.scoreA ?? 0}<span>–</span>{session?.scoreB ?? 0}</strong>
+            <small>{t('scout.set', 'Set {{set}}', { set: session?.currentSet ?? 1 })}</small>
           </div>
-
-          <div className={styles.formGroup} style={{ flex: 1, minWidth: '120px', marginBottom: 0 }}>
-            <label style={{ fontSize: '0.75rem' }}>Filter Team</label>
-            <select
-              className={styles.input}
-              value={filterTeam}
-              onChange={(e) => setFilterTeam(e.target.value)}
-            >
-              <option value="ALL">All Teams</option>
-              <option value="A">{activeSession?.teamA || 'Team A'}</option>
-              <option value="B">{activeSession?.teamB || 'Team B'}</option>
-            </select>
+          <div className={styles.eventSummary}>
+            <strong>{eventCount}</strong><span>{t('scout.events_count', 'Events')}</span>
           </div>
-
-          <div className={styles.formGroup} style={{ flex: 1, minWidth: '120px', marginBottom: 0 }}>
-            <label style={{ fontSize: '0.75rem' }}>Filter Skill</label>
-            <select
-              className={styles.input}
-              value={filterSkill}
-              onChange={(e) => setFilterSkill(e.target.value)}
-            >
-              <option value="ALL">All Skills</option>
-              <option value="attack">Attack</option>
-              <option value="block">Block</option>
-              <option value="set">Set</option>
-              <option value="receive">Receive</option>
-              <option value="serve">Serve</option>
-              <option value="dig">Dig</option>
-            </select>
+          <div className={styles.exportActions}>
+            <button type="button" className={styles.button} disabled={!session} onClick={() => exportEvents('csv')}><ArrowDownToLine size={15} />CSV</button>
+            <button type="button" className={styles.button} disabled={!session} onClick={() => exportEvents('json')}><ArrowDownToLine size={15} />JSON</button>
           </div>
+        </section>
 
-          <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-end' }}>
-            <button
-              onClick={handleExportCSV}
-              className={styles.secondaryBtn}
-              style={{ width: 'auto', marginTop: 0, padding: '10px 14px', fontSize: '0.85rem' }}
-            >
-              Export CSV
-            </button>
-            <button
-              onClick={handleExportJSON}
-              className={styles.secondaryBtn}
-              style={{ width: 'auto', marginTop: 0, padding: '10px 14px', fontSize: '0.85rem' }}
-            >
-              Export JSON
-            </button>
-          </div>
-        </div>
-
-        {/* Events Table */}
-        <div style={{ overflowX: 'auto', marginTop: '20px' }}>
-          {filteredEvents.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              {t('scout.no_events', 'No events found in this session.')}
+        <section className={styles.eventsSection} aria-labelledby="events-title">
+          <div className={styles.sectionHeader}>
+            <div><h2 id="events-title">{t('review.events', 'Events')}</h2><span>{t('review.event_count', '{{count}} recorded', { count: filteredEvents.length })}</span></div>
+            <div className={styles.filters}>
+              <label><span>{t('review.filter_team', 'Team')}</span><select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}><option value="ALL">{t('review.all_teams', 'All teams')}</option><option value="A">{teamName('A')}</option><option value="B">{teamName('B')}</option></select></label>
+              <label><span>{t('review.filter_skill', 'Skill')}</span><select value={skillFilter} onChange={(event) => setSkillFilter(event.target.value)}><option value="ALL">{t('review.all_skills', 'All skills')}</option>{options.map(([id, key]) => <option key={id} value={id}>{t(key, id)}</option>)}</select></label>
             </div>
+          </div>
+
+          {!filteredEvents.length ? (
+            <div className={styles.emptyState}><div className={styles.emptyMark}>—</div><h3>{t('review.empty_title', 'No events to show')}</h3><p>{events.length ? t('review.empty_filter', 'Try changing the filters.') : t('review.empty_match', 'Events recorded for this match will appear here.')}</p></div>
           ) : (
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Set</th>
-                  <th>Team</th>
-                  <th>Player</th>
-                  <th>Skill</th>
-                  <th>Zone</th>
-                  <th>Evaluation</th>
-                  <th>Impact</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEvents.map((ev) => (
-                  <tr key={ev.id}>
-                    <td>{new Date(ev.timestamp).toLocaleTimeString()}</td>
-                    <td>Set {ev.setNumber}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--accent)' }}>
-                      {ev.teamId === 'A' ? activeSession?.teamA || 'A' : activeSession?.teamB || 'B'}
-                    </td>
-                    <td>{ev.playerId ? `#${ev.playerId}` : '—'}</td>
-                    <td style={{ textTransform: 'capitalize' }}>{ev.skill}</td>
-                    <td>{ev.originZone ? `Z${ev.originZone}` : '—'}</td>
-                    <td>
-                      {editingEventId === ev.id ? (
-                        <select
-                          value={editEvaluation}
-                          onChange={(e) => setEditEvaluation(parseInt(e.target.value, 10))}
-                          className={styles.input}
-                          style={{ padding: '2px 6px', fontSize: '0.8rem' }}
-                        >
-                          <option value="1">+1 (Positive)</option>
-                          <option value="0">0 (Neutral)</option>
-                          <option value="-1">-1 (Negative)</option>
-                        </select>
-                      ) : (
-                        <span
-                          style={{
-                            fontWeight: 700,
-                            color:
-                              (ev.evaluation ?? 0) > 0
-                                ? '#34C759'
-                                : (ev.evaluation ?? 0) < 0
-                                ? '#FF3B30'
-                                : 'var(--text-secondary)'
-                          }}
-                        >
-                          {(ev.evaluation ?? 0) > 0 ? '+1' : ev.evaluation}
-                        </span>
-                      )}
-                    </td>
-                    <td>{ev.pointImpact || '—'}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        {editingEventId === ev.id ? (
-                          <button
-                            className={styles.actionBtn}
-                            onClick={() => handleSaveEdit(ev.id)}
-                            style={{ color: '#34C759' }}
-                          >
-                            Save
-                          </button>
-                        ) : (
-                          <button
-                            className={styles.actionBtn}
-                            onClick={() => {
-                              setEditingEventId(ev.id);
-                              setEditEvaluation(ev.evaluation ?? 0);
-                            }}
-                          >
-                            Edit
-                          </button>
-                        )}
-                        <button
-                          className={styles.actionBtn}
-                          onClick={() => handleDeleteEvent(ev.id)}
-                          style={{ color: '#FF3B30' }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead><tr><th>{t('review.time', 'Time')}</th><th>{t('review.set', 'Set')}</th><th>{t('review.team', 'Team')}</th><th>{t('review.player', 'Player')}</th><th>{t('review.skill', 'Skill')}</th><th>{t('review.zone', 'Zone')}</th><th>{t('review.result', 'Result')}</th><th>{t('review.point', 'Point')}</th><th><span className={styles.srOnly}>{t('review.actions', 'Actions')}</span></th></tr></thead>
+                  <tbody>{filteredEvents.map((event) => <tr key={event.id}>
+                    <td>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                    <td>{event.setNumber}</td><td><span className={styles.teamBadge} data-team={event.teamId}>{teamName(event.teamId)}</span></td>
+                    <td>{resolvePlayer(session, event)}</td><td>{t(`skill.${event.skill}`, event.skill)}</td><td>{event.originZone ? `Z${event.originZone}` : '—'}</td>
+                    <td><span className={styles.evaluation} data-value={event.evaluation ?? 0}>{(event.evaluation ?? 0) > 0 ? '+1' : event.evaluation ?? '—'}</span></td>
+                    <td>{event.pointImpact ? teamName(event.pointImpact === 'TEAM_A' ? 'A' : 'B') : '—'}</td>
+                    <td><div className={styles.rowActions}><button type="button" aria-label={`${t('common.edit', 'Edit')} ${t(`skill.${event.skill}`, event.skill)}`} onClick={() => beginEdit(event)}><Pencil size={15} /></button><button type="button" aria-label={`${t('common.delete', 'Delete')} ${t(`skill.${event.skill}`, event.skill)}`} onClick={() => void removeEvent(event)}><Trash2 size={15} /></button></div></td>
+                  </tr>)}</tbody>
+                </table>
+              </div>
+              <div className={styles.mobileEvents}>{filteredEvents.map((event) => <article className={styles.eventCard} key={event.id}>
+                <div className={styles.eventCardTop}><span>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span><span>{t('review.set', 'Set')} {event.setNumber}</span><span className={styles.teamBadge} data-team={event.teamId}>{teamName(event.teamId)}</span></div>
+                <div className={styles.eventCardMain}><strong>{t(`skill.${event.skill}`, event.skill)}</strong><span>{event.originZone ? `Z${event.originZone}` : '—'} · {(event.evaluation ?? 0) > 0 ? '+1' : event.evaluation ?? '—'}</span></div>
+                <div className={styles.eventCardBottom}><span>{resolvePlayer(session, event)}</span><div className={styles.rowActions}><button type="button" aria-label={`${t('common.edit', 'Edit')} ${t(`skill.${event.skill}`, event.skill)}`} onClick={() => beginEdit(event)}><Pencil size={15} /></button><button type="button" aria-label={`${t('common.delete', 'Delete')} ${t(`skill.${event.skill}`, event.skill)}`} onClick={() => void removeEvent(event)}><Trash2 size={15} /></button></div></div>
+              </article>)}</div>
+            </>
           )}
-        </div>
+        </section>
       </div>
-    </div>
+
+      {editing && draft && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setEditing(null); setDraft(null); } }}>
+        <section className={styles.editDialog} role="dialog" aria-modal="true" aria-labelledby="edit-event-title">
+          <header><div><p className={styles.eyebrow}>{t('review.edit_eyebrow', 'EVENT DETAILS')}</p><h2 id="edit-event-title">{t('review.edit_title', 'Edit event')}</h2></div><button type="button" className={styles.closeButton} aria-label={t('common.close', 'Close')} onClick={() => { setEditing(null); setDraft(null); }}><X size={18} /></button></header>
+          <div className={styles.editGrid}>
+            <label><span>{t('review.team', 'Team')}</span><select value={draft.teamId} onChange={(event) => setDraft({ ...draft, teamId: event.target.value, playerId: undefined })}><option value="A">{teamName('A')}</option><option value="B">{teamName('B')}</option></select></label>
+            <label><span>{t('review.player', 'Player')}</span><select value={draft.playerId ?? ''} onChange={(event) => setDraft({ ...draft, playerId: event.target.value || undefined })}><option value="">—</option>{players.map((player) => <option key={player.id} value={player.id}>#{player.number}{player.name ? ` ${player.name}` : ''}</option>)}</select></label>
+            <label><span>{t('review.skill', 'Skill')}</span><select value={draft.skill} onChange={(event) => setDraft({ ...draft, skill: event.target.value })}>{options.map(([id, key]) => <option key={id} value={id}>{t(key, id)}</option>)}</select></label>
+            <label><span>{t('review.zone', 'Zone')}</span><select value={draft.originZone ?? ''} onChange={(event) => setDraft({ ...draft, originZone: event.target.value ? Number(event.target.value) : undefined })}><option value="">—</option>{[1, 2, 3, 4, 5, 6].map((zone) => <option key={zone} value={zone}>Z{zone}</option>)}</select></label>
+            <label><span>{t('review.result', 'Evaluation')}</span><select value={draft.evaluation ?? 0} onChange={(event) => setDraft({ ...draft, evaluation: Number(event.target.value) })}><option value="1">+1 · {t('result.positive', 'Positive')}</option><option value="0">0 · {t('result.neutral', 'Neutral')}</option><option value="-1">-1 · {t('result.negative', 'Negative')}</option></select></label>
+            <label><span>{t('review.point_impact', 'Point impact')}</span><select value={draft.pointImpact ?? ''} onChange={(event) => setDraft({ ...draft, pointImpact: (event.target.value || null) as EventDraft['pointImpact'] })}><option value="">{t('review.no_point', 'No point')}</option><option value="TEAM_A">{teamName('A')}</option><option value="TEAM_B">{teamName('B')}</option></select></label>
+          </div>
+          <footer><button type="button" className={styles.button} onClick={() => { setEditing(null); setDraft(null); }}>{t('common.cancel', 'Cancel')}</button><button type="button" className={styles.primaryButton} disabled={saving} onClick={() => void saveEdit()}>{saving ? t('common.saving', 'Saving…') : <><Check size={16} />{t('common.save', 'Save changes')}</>}</button></footer>
+        </section>
+      </div>}
+    </AppShell>
   );
 }

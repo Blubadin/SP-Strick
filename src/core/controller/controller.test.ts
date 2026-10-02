@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import { applyDeadzone } from './StickNormalizer';
 import { ButtonStateMachine } from './ButtonStateMachine';
 import {
@@ -7,7 +7,10 @@ import {
   angularDifference,
   DEFAULT_RADIAL_CONFIG
 } from './RadialSelector';
-import { detectProfile } from './ControllerProfile';
+import { detectProfile, STANDARD_PROFILE, XBOX_PROFILE, validateControllerProfile } from './ControllerProfile';
+import type { ControllerProfile } from './ControllerTypes';
+import { useControllerStore } from './ControllerStore';
+import { hapticManager } from './HapticManager';
 
 describe('StickNormalizer (applyDeadzone)', () => {
   it('suppresses input within deadzone', () => {
@@ -140,6 +143,224 @@ describe('ButtonStateMachine', () => {
     const frameAfterReset = bsm.update([{ pressed: true, value: 1 }], mapping);
     expect(frameAfterReset.buttons.FACE_SOUTH.pressedThisFrame).toBe(true);
     expect(frameAfterReset.buttons.FACE_SOUTH.held).toBe(false);
+  });
+
+  it('reports a pressed edge for every semantic control that shares an index', () => {
+    const duplicateMapping = { FACE_SOUTH: 0, FACE_EAST: 0 } as const;
+    const frame = bsm.update([{ pressed: true, value: 1 }], duplicateMapping);
+
+    expect(frame.buttons.FACE_SOUTH.pressedThisFrame).toBe(true);
+    expect(frame.buttons.FACE_EAST.pressedThisFrame).toBe(true);
+  });
+});
+
+describe('Controller Store', () => {
+  beforeEach(() => {
+    useControllerStore.setState({
+      profile: STANDARD_PROFILE,
+      profileSelectionMode: 'automatic',
+      customProfiles: [],
+      hapticsEnabled: true
+    });
+    hapticManager.setEnabled(true);
+  });
+
+  afterEach(() => {
+    useControllerStore.getState().setHapticsEnabled(true);
+    vi.unstubAllGlobals();
+  });
+
+  it('rejects custom profiles with duplicate physical button bindings', () => {
+    const duplicateProfile = {
+      ...STANDARD_PROFILE,
+      id: 'custom-duplicate',
+      name: 'Duplicate buttons',
+      builtIn: false,
+      buttons: { ...STANDARD_PROFILE.buttons, FACE_EAST: STANDARD_PROFILE.buttons.FACE_SOUTH }
+    };
+
+    expect(useControllerStore.getState().addCustomProfile(duplicateProfile)).toBe(false);
+    expect(useControllerStore.getState().customProfiles).toEqual([]);
+  });
+
+  it('hydrates only unique valid custom profiles and re-detects one for the connected device', () => {
+    useControllerStore.getState().setConnected(true, 'Hydration Test Pad', 0, null, '');
+    const validProfile: ControllerProfile = {
+      ...STANDARD_PROFILE,
+      id: 'custom-hydrated',
+      name: 'Hydrated profile',
+      type: 'custom',
+      detectedIdPatterns: ['Hydration Test Pad'],
+      builtIn: false
+    };
+    const invalidProfile: ControllerProfile = {
+      ...validProfile,
+      id: 'custom-invalid',
+      buttons: { ...validProfile.buttons, FACE_EAST: validProfile.buttons.FACE_SOUTH }
+    };
+
+    const hydrated = useControllerStore.getState().hydrateCustomProfiles([
+      validProfile,
+      invalidProfile,
+      XBOX_PROFILE,
+      { ...validProfile, name: 'Duplicate id' }
+    ]);
+
+    expect(hydrated).toBe(1);
+    expect(useControllerStore.getState().customProfiles).toEqual([validProfile]);
+    expect(useControllerStore.getState().profile).toBe(validProfile);
+  });
+
+  it('returns validation errors for malformed profile data instead of throwing', () => {
+    const malformed = {} as ControllerProfile;
+
+    expect(() => validateControllerProfile(malformed)).not.toThrow();
+    expect(validateControllerProfile(malformed).valid).toBe(false);
+  });
+
+  it('rejects unknown semantic controls in hydrated profile mappings', () => {
+    const malformed = {
+      ...STANDARD_PROFILE,
+      id: 'custom-unknown-control',
+      builtIn: false,
+      buttons: { ...STANDARD_PROFILE.buttons, UNKNOWN_CONTROL: 18 }
+    } as unknown as ControllerProfile;
+
+    expect(validateControllerProfile(malformed).valid).toBe(false);
+  });
+
+  it('keeps built-in profiles immutable through custom profile mutations', () => {
+    useControllerStore.getState().setProfile(XBOX_PROFILE);
+    useControllerStore.getState().updateCustomProfile({ ...XBOX_PROFILE, name: 'Changed' });
+    useControllerStore.getState().deleteCustomProfile(XBOX_PROFILE.id);
+
+    expect(XBOX_PROFILE.name).toBe('Xbox Wireless Controller');
+    expect(useControllerStore.getState().profile).toBe(XBOX_PROFILE);
+    expect(Object.isFrozen(XBOX_PROFILE.buttons)).toBe(true);
+  });
+
+  it('synchronizes the haptic manager when haptics are disabled', () => {
+    useControllerStore.getState().setHapticsEnabled(false);
+
+    expect(useControllerStore.getState().hapticsEnabled).toBe(false);
+    expect(hapticManager.isEnabled()).toBe(false);
+  });
+
+  it('resolves the active connected Gamepad for a haptic call without an explicit argument', async () => {
+    const playEffect = vi.fn().mockResolvedValue('complete');
+    const gamepad = {
+      id: 'Haptic Test Pad',
+      index: 1,
+      mapping: 'standard',
+      connected: true,
+      timestamp: 100,
+      buttons: [],
+      axes: [],
+      vibrationActuator: { playEffect },
+      hapticActuators: []
+    } as unknown as Gamepad;
+    useControllerStore.setState({
+      state: {
+        connected: true,
+        id: gamepad.id,
+        index: 1,
+        mapping: 'standard',
+        buttons: useControllerStore.getState().state.buttons,
+        leftStick: { x: 0, y: 0, magnitude: 0, angle: 0 },
+        rightStick: { x: 0, y: 0, magnitude: 0, angle: 0 },
+        hapticActuator: null
+      }
+    });
+    vi.stubGlobal('navigator', { getGamepads: () => [null, gamepad] });
+
+    await hapticManager.success();
+
+    expect(playEffect).toHaveBeenCalledOnce();
+  });
+
+  it('does not vibrate when the synchronized haptic preference is disabled', async () => {
+    const playEffect = vi.fn().mockResolvedValue('complete');
+    const gamepad = {
+      id: 'Haptic Test Pad', index: 1, mapping: 'standard', connected: true,
+      timestamp: 100, buttons: [], axes: [],
+      vibrationActuator: { playEffect }, hapticActuators: []
+    } as unknown as Gamepad;
+    useControllerStore.setState({
+      state: {
+        ...useControllerStore.getState().state,
+        connected: true,
+        id: gamepad.id,
+        index: 1
+      }
+    });
+    useControllerStore.getState().setHapticsEnabled(false);
+    vi.stubGlobal('navigator', { getGamepads: () => [null, gamepad] });
+
+    await hapticManager.success();
+
+    expect(playEffect).not.toHaveBeenCalled();
+  });
+
+  it('reports haptics unavailable when the active Gamepad no longer reports connected', () => {
+    const gamepad = {
+      id: 'Disconnected Haptic Pad', index: 1, mapping: 'standard', connected: false,
+      timestamp: 100, buttons: [], axes: [],
+      vibrationActuator: { playEffect: vi.fn() }, hapticActuators: []
+    } as unknown as Gamepad;
+    useControllerStore.setState({
+      state: { ...useControllerStore.getState().state, connected: true, id: gamepad.id, index: 1 }
+    });
+    vi.stubGlobal('navigator', { getGamepads: () => [null, gamepad] });
+
+    expect(hapticManager.isAvailable()).toBe(false);
+  });
+
+  it('stores the actual Gamepad mapping metadata supplied during connection', () => {
+    useControllerStore.getState().setConnected(true, 'Unmapped USB Pad', 2, null, '');
+
+    expect(useControllerStore.getState().state.mapping).toBe('');
+  });
+
+  it('preserves a manually selected custom profile when the controller reconnects', () => {
+    const customProfile = {
+      ...STANDARD_PROFILE,
+      id: 'custom-manual',
+      name: 'Manual profile',
+      builtIn: false
+    };
+    useControllerStore.getState().setProfile(customProfile);
+
+    useControllerStore.getState().setConnected(true, 'Xbox Wireless Controller', 0, null, 'standard');
+
+    expect(useControllerStore.getState().profile).toBe(customProfile);
+  });
+
+  it('clears stale button edges and stick values when a controller connects', () => {
+    useControllerStore.getState().updateState({
+      buttons: {
+        ...useControllerStore.getState().state.buttons,
+        FACE_SOUTH: { pressed: true, pressedThisFrame: true, releasedThisFrame: false, held: false }
+      },
+      leftStick: { x: 0.5, y: 0, magnitude: 0.5, angle: 0 },
+      rightStick: { x: 0, y: 0.5, magnitude: 0.5, angle: 90 }
+    });
+
+    useControllerStore.getState().setConnected(true, 'Generic Pad', 0, null, 'standard');
+
+    expect(useControllerStore.getState().state.buttons.FACE_SOUTH.pressedThisFrame).toBe(false);
+    expect(useControllerStore.getState().state.leftStick.magnitude).toBe(0);
+    expect(useControllerStore.getState().state.rightStick.magnitude).toBe(0);
+  });
+
+  it('rejects invalid deadzones and tunes a copy without mutating built-in profiles', () => {
+    useControllerStore.getState().setProfile(XBOX_PROFILE);
+    useControllerStore.getState().setDeadzone(1.2);
+    expect(useControllerStore.getState().profile.leftStick.deadzone).toBe(0.2);
+
+    useControllerStore.getState().setDeadzone(0.35);
+
+    expect(useControllerStore.getState().profile.leftStick.deadzone).toBe(0.35);
+    expect(XBOX_PROFILE.leftStick.deadzone).toBe(0.2);
   });
 });
 

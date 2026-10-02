@@ -36,6 +36,10 @@ export function createInitialButtonMap(): Record<SemanticControl, ButtonState> {
   return map;
 }
 
+export function hasButtonFrameEdges(buttons: Record<SemanticControl, ButtonState>): boolean {
+  return Object.values(buttons).some((state) => state.pressedThisFrame || state.releasedThisFrame);
+}
+
 export type InputButton = GamepadButton | number | { pressed: boolean; value?: number; touched?: boolean };
 
 export class ButtonStateMachine {
@@ -60,17 +64,22 @@ export class ButtonStateMachine {
   } {
     const buttons = createInitialButtonMap();
     let hasChanged = false;
+    const currentRawState = new Map<number, boolean>();
 
     for (const control of ALL_SEMANTIC_CONTROLS) {
       const physicalIndex = mapping[control];
       if (physicalIndex === undefined) continue;
 
-      const rawBtn = gamepadButtons[physicalIndex];
-      const isPressed = rawBtn
-        ? typeof rawBtn === 'object'
-          ? rawBtn.pressed
-          : rawBtn > 0.5
-        : false;
+      let isPressed = currentRawState.get(physicalIndex);
+      if (isPressed === undefined) {
+        const rawBtn = gamepadButtons[physicalIndex];
+        isPressed = rawBtn
+          ? typeof rawBtn === 'object'
+            ? rawBtn.pressed
+            : rawBtn > 0.5
+          : false;
+        currentRawState.set(physicalIndex, isPressed);
+      }
 
       const wasPressed = this.previousRawState.get(physicalIndex) ?? false;
 
@@ -88,7 +97,11 @@ export class ButtonStateMachine {
         releasedThisFrame,
         held
       };
+    }
 
+    // Update history after resolving every semantic control so duplicate mappings
+    // receive the same press/release edge instead of depending on iteration order.
+    for (const [physicalIndex, isPressed] of currentRawState) {
       this.previousRawState.set(physicalIndex, isPressed);
     }
 

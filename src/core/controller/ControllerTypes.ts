@@ -47,6 +47,7 @@ export interface ControllerState {
   connected: boolean;
   id: string | null;
   index: number | null;
+  mapping: Gamepad['mapping'] | null;
   buttons: Record<SemanticControl, ButtonState>;
   leftStick: AxisState;
   rightStick: AxisState;

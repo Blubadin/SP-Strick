@@ -526,6 +526,13 @@
   margin-bottom: 20px;
 }
 
+.modalHint {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin: -10px 0 16px;
+}
+
 .modalActions {
   display: flex;
   flex-direction: column;
@@ -562,6 +569,68 @@
   background: rgba(255, 59, 48, 0.15);
   border: 1px solid rgba(255, 59, 48, 0.4);
   color: #FF3B30;
+}
+
+.modalBtnFocused {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgba(41, 151, 255, 0.16);
+}
+
+.quickEditCard {
+  max-height: min(90vh, 720px);
+  overflow-y: auto;
+}
+
+.quickEditFields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.quickEditField {
+  display: grid;
+  grid-template-columns: 1fr minmax(90px, 1.3fr) 24px;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.quickEditField strong {
+  overflow: hidden;
+  font-size: 0.9rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quickEditField > span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.quickEditField > :last-child {
+  justify-self: end;
+}
+
+.quickEditError {
+  color: #FF3B30;
+  font-size: 0.82rem;
+  margin: 0 0 12px;
+}
+
+.quickEditRadialLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  pointer-events: none;
 }
 
 /* ==========================================================
@@ -662,5 +731,15 @@
     height: 36px;
     padding: 0 12px;
     font-size: 0.75rem;
+  }
+
+  .modalCard {
+    width: min(92%, 420px);
+    padding: 18px;
+  }
+
+  .quickEditField {
+    grid-template-columns: 0.8fr minmax(70px, 1.2fr) 24px;
+    padding: 9px 10px;
   }
 }

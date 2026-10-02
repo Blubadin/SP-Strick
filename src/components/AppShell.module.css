@@ -1,0 +1,254 @@
+.shell {
+  min-height: 100vh;
+  background: var(--bg-0);
+}
+
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(11, 13, 16, 0.96);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.brand img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-normal);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.topTools {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.77rem;
+}
+
+.connectionDot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.isConnected {
+  background: var(--success);
+}
+
+.connectionText {
+  overflow: hidden;
+  max-width: min(32vw, 280px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.languageButton {
+  min-width: 42px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-normal);
+  border-radius: var(--radius-xs);
+  background: var(--surface-0);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.languageButton:hover {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+.body {
+  display: grid;
+  grid-template-columns: 212px minmax(0, 1fr);
+  min-height: calc(100vh - 64px);
+}
+
+.sidebar {
+  position: sticky;
+  top: 64px;
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  min-height: calc(100vh - 64px);
+  padding: 26px 14px 18px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.navCaption {
+  padding: 0 10px 12px;
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 42px;
+  margin: 2px 0;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-weight: 560;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.navLink:hover {
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-primary);
+}
+
+.navActive,
+.navActive:hover {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.navActive svg {
+  color: var(--accent-hover);
+}
+
+.sidebarFooter {
+  margin-top: auto;
+  padding: 16px 10px 0;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: 0.67rem;
+  line-height: 1.5;
+}
+
+.mainColumn {
+  min-width: 0;
+}
+
+.main {
+  min-width: 0;
+  min-height: calc(100vh - 64px);
+  padding: 34px clamp(22px, 4vw, 64px) 56px;
+}
+
+.content {
+  width: min(100%, 1360px);
+  margin: 0 auto;
+}
+
+.mobileNav {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .topBar {
+    height: 56px;
+    padding: 0 16px;
+  }
+
+  .body {
+    display: block;
+    min-height: calc(100vh - 56px);
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobileNav {
+    position: sticky;
+    top: 56px;
+    z-index: 15;
+    display: flex;
+    justify-content: space-around;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: rgba(11, 13, 16, 0.97);
+    scrollbar-width: none;
+  }
+
+  .mobileNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobileNav .navLink {
+    flex: 1 0 58px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    min-width: 58px;
+    min-height: 46px;
+    margin: 0;
+    padding: 4px 3px;
+    font-size: 0.62rem;
+  }
+
+  .mobileNav .navLink svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .main {
+    min-height: calc(100vh - 109px);
+    padding: 22px 17px 40px;
+  }
+
+  .connectionText {
+    max-width: 34vw;
+  }
+}
+
+@media (max-width: 420px) {
+  .topBar {
+    padding: 0 12px;
+  }
+
+  .topTools {
+    gap: 10px;
+  }
+
+  .connection {
+    font-size: 0.68rem;
+  }
+
+  .brand img {
+    width: 27px;
+    height: 27px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+}

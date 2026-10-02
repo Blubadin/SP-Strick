@@ -6,14 +6,14 @@ import { listenForGamepadConnections } from '../core/controller/GamepadDetector'
 
 export default function App() {
   useEffect(() => {
-    listenForGamepadConnections();
+    const cleanupDetector = listenForGamepadConnections();
     startGamepadPolling();
+
     return () => {
+      cleanupDetector();
       stopGamepadPolling();
     };
   }, []);
 
-  return (
-    <RouterProvider router={router} />
-  );
+  return <RouterProvider router={router} />;
 }

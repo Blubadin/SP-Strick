@@ -1,59 +1,103 @@
 import { create } from 'zustand';
-import type { ControllerState, SemanticControl, ButtonState, ControllerProfile } from './ControllerTypes';
+import type { ControllerState, ControllerProfile } from './ControllerTypes';
+import { STANDARD_PROFILE, detectProfile } from './ControllerProfile';
+import { createInitialButtonMap } from './ButtonStateMachine';
 
-const defaultButtonState = (): ButtonState => ({ pressed: false, pressedThisFrame: false, releasedThisFrame: false, held: false });
-const defaultButtons = () => {
-  const controls: SemanticControl[] = [
-    'FACE_SOUTH', 'FACE_EAST', 'FACE_WEST', 'FACE_NORTH',
-    'LEFT_BUMPER', 'RIGHT_BUMPER', 'LEFT_TRIGGER', 'RIGHT_TRIGGER',
-    'LEFT_STICK_BUTTON', 'RIGHT_STICK_BUTTON',
-    'DPAD_UP', 'DPAD_RIGHT', 'DPAD_DOWN', 'DPAD_LEFT',
-    'MENU', 'VIEW'
-  ];
-  const b: any = {};
-  controls.forEach(c => b[c] = defaultButtonState());
-  return b as Record<SemanticControl, ButtonState>;
-};
-
-export const STANDARD_PROFILE: ControllerProfile = {
-  id: 'standard',
-  name: 'Standard Gamepad',
-  type: 'standard',
-  mapping: {
-    FACE_SOUTH: 0, FACE_EAST: 1, FACE_WEST: 2, FACE_NORTH: 3,
-    LEFT_BUMPER: 4, RIGHT_BUMPER: 5, LEFT_TRIGGER: 6, RIGHT_TRIGGER: 7,
-    VIEW: 8, MENU: 9, LEFT_STICK_BUTTON: 10, RIGHT_STICK_BUTTON: 11,
-    DPAD_UP: 12, DPAD_DOWN: 13, DPAD_LEFT: 14, DPAD_RIGHT: 15
-  },
-  leftStickIndexX: 0,
-  leftStickIndexY: 1,
-  rightStickIndexX: 2,
-  rightStickIndexY: 3,
-  deadzone: 0.20
-};
-
-interface Store {
+interface ControllerStoreState {
   state: ControllerState;
   profile: ControllerProfile;
-  setConnected: (connected: boolean, id: string | null, index: number | null, haptic: GamepadHapticActuator | null) => void;
+  customProfiles: ControllerProfile[];
+  hapticsEnabled: boolean;
+
+  setConnected: (
+    connected: boolean,
+    id: string | null,
+    index: number | null,
+    haptic: GamepadHapticActuator | null
+  ) => void;
+  setProfile: (profile: ControllerProfile) => void;
+  setHapticsEnabled: (enabled: boolean) => void;
+  setDeadzone: (deadzone: number) => void;
+  addCustomProfile: (profile: ControllerProfile) => void;
+  updateCustomProfile: (profile: ControllerProfile) => void;
+  deleteCustomProfile: (id: string) => void;
   updateState: (newState: Partial<ControllerState>) => void;
 }
 
-export const useControllerStore = create<Store>((set: any) => ({
+export const useControllerStore = create<ControllerStoreState>((set, get) => ({
   state: {
     connected: false,
     id: null,
     index: null,
-    buttons: defaultButtons(),
+    buttons: createInitialButtonMap(),
     leftStick: { x: 0, y: 0, magnitude: 0, angle: 0 },
     rightStick: { x: 0, y: 0, magnitude: 0, angle: 0 },
-    hapticActuator: null,
+    hapticActuator: null
   },
   profile: STANDARD_PROFILE,
-  setConnected: (connected: boolean, id: string | null, index: number | null, haptic: GamepadHapticActuator | null) => set((s: any) => ({
-    state: { ...s.state, connected, id, index, hapticActuator: haptic }
-  })),
-  updateState: (newState: Partial<ControllerState>) => set((s: any) => ({
-    state: { ...s.state, ...newState }
-  }))
+  customProfiles: [],
+  hapticsEnabled: true,
+
+  setConnected: (connected, id, index, haptic) => {
+    if (connected && id) {
+      const detected = detectProfile(id, 'standard', get().customProfiles);
+      set((s) => ({
+        profile: detected,
+        state: {
+          ...s.state,
+          connected: true,
+          id,
+          index,
+          hapticActuator: haptic
+        }
+      }));
+    } else {
+      set((s) => ({
+        state: {
+          ...s.state,
+          connected: false,
+          id: null,
+          index: null,
+          buttons: createInitialButtonMap(),
+          leftStick: { x: 0, y: 0, magnitude: 0, angle: 0 },
+          rightStick: { x: 0, y: 0, magnitude: 0, angle: 0 },
+          hapticActuator: null
+        }
+      }));
+    }
+  },
+
+  setProfile: (profile) => set({ profile }),
+
+  setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
+
+  setDeadzone: (deadzone) => {
+    const p = get().profile;
+    set({
+      profile: {
+        ...p,
+        leftStick: { ...p.leftStick, deadzone }
+      }
+    });
+  },
+
+  addCustomProfile: (profile) =>
+    set((s) => ({ customProfiles: [...s.customProfiles, profile] })),
+
+  updateCustomProfile: (profile) =>
+    set((s) => ({
+      customProfiles: s.customProfiles.map((p) => (p.id === profile.id ? profile : p)),
+      profile: s.profile.id === profile.id ? profile : s.profile
+    })),
+
+  deleteCustomProfile: (id) =>
+    set((s) => ({
+      customProfiles: s.customProfiles.filter((p) => p.id !== id),
+      profile: s.profile.id === id ? STANDARD_PROFILE : s.profile
+    })),
+
+  updateState: (newState) =>
+    set((s) => ({
+      state: { ...s.state, ...newState }
+    }))
 }));

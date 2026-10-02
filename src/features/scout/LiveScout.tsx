@@ -1,161 +1,495 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useControllerStore } from '../../core/controller/ControllerStore';
 import { useScoutStore } from '../../core/scouting/ScoutStore';
-import { RadialMenu } from '../radial/RadialMenu';
-import { useTranslation } from 'react-i18next';
+import { intentDispatcher, type ControllerIntent } from '../../core/controller/ControllerIntent';
+import { getHysteresisSector } from '../../core/controller/RadialSelector';
+import { RadialMenu, type RadialOptionItem } from '../radial/RadialMenu';
+import { VOLLEYBALL_SKILLS } from '../../core/sports/volleyball/volleyball.skills';
+import { VOLLEYBALL_ZONES } from '../../core/sports/volleyball/volleyball.zones';
+import { VOLLEYBALL_RESULTS } from '../../core/sports/volleyball/volleyball.rules';
+import { ControllerGlyph } from '../../components/ControllerGlyph';
+import { hapticManager } from '../../core/controller/HapticManager';
 import styles from './LiveScout.module.css';
 
-const SKILLS = ['Attack', 'Block', 'Set', 'Receive', 'Serve', 'Dig', 'Freeball', 'Other'];
-const ZONES = ['1', '6', '5', '4', '3', '2'];
-const RESULTS = ['+1', '0', '-1'];
-
-function getActiveSegment(angle: number, magnitude: number, optionsCount: number): number | null {
-  if (magnitude < 0.55) return null;
-  // Options are laid out circularly. 
-  // Let's assume angle 0 is Right (option 0), angle increases clockwise.
-  const segmentAngle = 360 / optionsCount;
-  // Shift by half segment so option 0 is centered at 0 degrees
-  let shiftedAngle = (angle + segmentAngle / 2) % 360;
-  if (shiftedAngle < 0) shiftedAngle += 360;
-  return Math.floor(shiftedAngle / segmentAngle) % optionsCount;
-}
+type ActiveWheelType = 'SKILL' | 'ZONE' | 'RESULT' | 'TEAM_PLAYER';
 
 export function LiveScout() {
   const { t } = useTranslation();
-  const { state: ctrl } = useControllerStore();
+  const navigate = useNavigate();
+
+  const ctrlState = useControllerStore((s) => s.state);
+  const profile = useControllerStore((s) => s.profile);
   const scout = useScoutStore();
 
-  const [activeWheel, setActiveWheel] = useState<'SKILL' | 'ZONE' | 'RESULT' | null>(null);
-  const [wheelSelection, setWheelSelection] = useState<string | null>(null);
+  const [activeWheel, setActiveWheel] = useState<ActiveWheelType | null>(null);
+  const [selectedSectorIdx, setSelectedSectorIdx] = useState<number | null>(null);
+  const [isPauseMenuOpen, setIsPauseMenuOpen] = useState(false);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
 
-  // Wheel configuration
-  const wheelConfig = useMemo(() => {
-    switch (activeWheel) {
-      case 'SKILL': return { options: SKILLS, label: t('scout.skill') };
-      case 'ZONE': return { options: ZONES, label: t('scout.zone') };
-      case 'RESULT': return { options: RESULTS, label: t('scout.result') };
-      default: return null;
+  const activeSectorRef = useRef<number | null>(null);
+  useEffect(() => {
+    activeSectorRef.current = selectedSectorIdx;
+  }, [selectedSectorIdx]);
+
+  // 1. Screen Wake Lock implementation
+  useEffect(() => {
+    let wakeLock: any = null;
+    const requestLock = async () => {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+          setWakeLockActive(true);
+        } catch {
+          // Gracefully continue without wake lock
+        }
+      }
+    };
+    requestLock();
+
+    return () => {
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, []);
+
+  // 2. Options for radial wheels
+  const wheelOptions: RadialOptionItem[] = useMemo(() => {
+    if (activeWheel === 'SKILL') {
+      return VOLLEYBALL_SKILLS.map((s) => ({
+        id: s.id,
+        label: t(s.i18nKey)
+      }));
     }
+    if (activeWheel === 'ZONE') {
+      return VOLLEYBALL_ZONES.map((z) => ({
+        id: z.id.toString(),
+        label: `Z${z.id}`,
+        subLabel: t(z.i18nKey)
+      }));
+    }
+    if (activeWheel === 'RESULT') {
+      return VOLLEYBALL_RESULTS.map((r) => ({
+        id: r.value.toString(),
+        label: r.label
+      }));
+    }
+    if (activeWheel === 'TEAM_PLAYER') {
+      const items: RadialOptionItem[] = [
+        { id: 'TEAM_A', label: scout.teamA || t('team.a') },
+        { id: 'TEAM_B', label: scout.teamB || t('team.b') }
+      ];
+
+      // If active team has players defined, include them
+      const activePlayers =
+        scout.activeTeam === 'A' ? scout.teamAPlayers : scout.teamBPlayers;
+      if (activePlayers && activePlayers.length > 0) {
+        for (const p of activePlayers.slice(0, 6)) {
+          items.push({
+            id: `PLAYER_${p.id}`,
+            label: `#${p.number}`,
+            subLabel: p.name
+          });
+        }
+      }
+      return items;
+    }
+    return [];
+  }, [activeWheel, t, scout.teamA, scout.teamB, scout.activeTeam, scout.teamAPlayers, scout.teamBPlayers]);
+
+  const wheelLabel = useMemo(() => {
+    if (activeWheel === 'SKILL') return t('scout.skill');
+    if (activeWheel === 'ZONE') return t('scout.zone');
+    if (activeWheel === 'RESULT') return t('scout.result');
+    if (activeWheel === 'TEAM_PLAYER') return t('scout.team_player', 'Team / Player');
+    return '';
   }, [activeWheel, t]);
 
-  // Handle D-Pad shortcuts
-  useEffect(() => {
-    if (ctrl.buttons.DPAD_UP.pressedThisFrame) {
-      scout.updateCurrentEvent({ evaluation: 1 });
-      scout.commitEvent();
-    }
-    if (ctrl.buttons.DPAD_RIGHT.pressedThisFrame) {
-      scout.updateCurrentEvent({ evaluation: 0 });
-      scout.commitEvent();
-    }
-    if (ctrl.buttons.DPAD_DOWN.pressedThisFrame) {
-      scout.updateCurrentEvent({ evaluation: -1 });
-      scout.commitEvent();
-    }
-    if (ctrl.buttons.DPAD_LEFT.pressedThisFrame) {
-      scout.undoLastEvent();
-    }
-    if (ctrl.buttons.LEFT_BUMPER.pressedThisFrame) {
-      scout.setActiveTeam('A');
-    }
-    if (ctrl.buttons.RIGHT_BUMPER.pressedThisFrame) {
-      scout.setActiveTeam('B');
-    }
-  }, [ctrl.buttons.DPAD_UP.pressedThisFrame, ctrl.buttons.DPAD_RIGHT.pressedThisFrame, ctrl.buttons.DPAD_DOWN.pressedThisFrame, ctrl.buttons.DPAD_LEFT.pressedThisFrame, ctrl.buttons.LEFT_BUMPER.pressedThisFrame, ctrl.buttons.RIGHT_BUMPER.pressedThisFrame]);
+  // 3. Radial Commit / Cancel handler
+  const handleWheelRelease = useCallback(
+    (wheelType: ActiveWheelType) => {
+      const sectorIdx = activeSectorRef.current;
+      if (sectorIdx !== null && wheelOptions[sectorIdx]) {
+        const item = wheelOptions[sectorIdx];
 
-  // Handle radial menu open/close
-  useEffect(() => {
-    if (ctrl.buttons.FACE_SOUTH.pressedThisFrame) setActiveWheel('SKILL');
-    if (ctrl.buttons.FACE_WEST.pressedThisFrame) setActiveWheel('ZONE');
-    if (ctrl.buttons.FACE_EAST.pressedThisFrame) setActiveWheel('RESULT');
-
-    const handleRelease = (wheelType: 'SKILL'|'ZONE'|'RESULT') => {
-      if (activeWheel === wheelType && wheelSelection) {
-        if (wheelType === 'SKILL') scout.updateCurrentEvent({ skill: wheelSelection });
-        if (wheelType === 'ZONE') scout.updateCurrentEvent({ originZone: parseInt(wheelSelection) });
-        if (wheelType === 'RESULT') {
-            const evalNum = wheelSelection === '+1' ? 1 : wheelSelection === '0' ? 0 : -1;
-            scout.updateCurrentEvent({ evaluation: evalNum });
-            scout.commitEvent();
+        if (wheelType === 'SKILL') {
+          scout.updateCurrentEvent({ skill: item.id });
+        } else if (wheelType === 'ZONE') {
+          scout.updateCurrentEvent({ originZone: parseInt(item.id, 10) });
+        } else if (wheelType === 'RESULT') {
+          scout.updateCurrentEvent({ evaluation: parseInt(item.id, 10) as any });
+        } else if (wheelType === 'TEAM_PLAYER') {
+          if (item.id === 'TEAM_A') scout.setActiveTeam('A');
+          else if (item.id === 'TEAM_B') scout.setActiveTeam('B');
+          else if (item.id.startsWith('PLAYER_')) {
+            scout.setSelectedPlayer(item.id.replace('PLAYER_', ''));
+          }
         }
       }
       setActiveWheel(null);
-      setWheelSelection(null);
-    };
+      setSelectedSectorIdx(null);
+    },
+    [wheelOptions, scout]
+  );
 
-    if (ctrl.buttons.FACE_SOUTH.releasedThisFrame) handleRelease('SKILL');
-    if (ctrl.buttons.FACE_WEST.releasedThisFrame) handleRelease('ZONE');
-    if (ctrl.buttons.FACE_EAST.releasedThisFrame) handleRelease('RESULT');
+  // 4. Intent Dispatcher Subscriptions (Quick controls, D-Pad, Undo, Bookmarks)
+  useEffect(() => {
+    const unsubscribe = intentDispatcher.subscribe((intent: ControllerIntent) => {
+      switch (intent.type) {
+        case 'SELECT_TEAM_A':
+          scout.setActiveTeam('A');
+          break;
+        case 'SELECT_TEAM_B':
+          scout.setActiveTeam('B');
+          break;
+        case 'QUICK_RESULT_POSITIVE':
+          scout.updateCurrentEvent({ evaluation: 1 });
+          break;
+        case 'QUICK_RESULT_NEUTRAL':
+          scout.updateCurrentEvent({ evaluation: 0 });
+          break;
+        case 'QUICK_RESULT_NEGATIVE':
+          scout.updateCurrentEvent({ evaluation: -1 });
+          break;
+        case 'UNDO_LAST_EVENT':
+          scout.undoLastEvent();
+          break;
+        case 'PAUSE_SESSION':
+          setIsPauseMenuOpen((prev) => !prev);
+          break;
+        case 'BOOKMARK_MOMENT':
+          scout.addBookmark();
+          break;
+        case 'OPEN_RADIAL':
+          setActiveWheel(intent.category);
+          setSelectedSectorIdx(null);
+          break;
+      }
+    });
+
+    return unsubscribe;
+  }, [scout]);
+
+  // 5. Button Releases (Trigger Commit / Cancel)
+  useEffect(() => {
+    if (ctrlState.buttons.FACE_SOUTH.releasedThisFrame && activeWheel === 'SKILL') {
+      handleWheelRelease('SKILL');
+    }
+    if (ctrlState.buttons.FACE_WEST.releasedThisFrame && activeWheel === 'ZONE') {
+      handleWheelRelease('ZONE');
+    }
+    if (ctrlState.buttons.FACE_EAST.releasedThisFrame && activeWheel === 'RESULT') {
+      handleWheelRelease('RESULT');
+    }
+    if (ctrlState.buttons.FACE_NORTH.releasedThisFrame && activeWheel === 'TEAM_PLAYER') {
+      handleWheelRelease('TEAM_PLAYER');
+    }
   }, [
-    ctrl.buttons.FACE_SOUTH.pressedThisFrame, ctrl.buttons.FACE_SOUTH.releasedThisFrame,
-    ctrl.buttons.FACE_WEST.pressedThisFrame, ctrl.buttons.FACE_WEST.releasedThisFrame,
-    ctrl.buttons.FACE_EAST.pressedThisFrame, ctrl.buttons.FACE_EAST.releasedThisFrame,
-    activeWheel, wheelSelection
+    ctrlState.buttons.FACE_SOUTH.releasedThisFrame,
+    ctrlState.buttons.FACE_WEST.releasedThisFrame,
+    ctrlState.buttons.FACE_EAST.releasedThisFrame,
+    ctrlState.buttons.FACE_NORTH.releasedThisFrame,
+    activeWheel,
+    handleWheelRelease
   ]);
 
-  // Handle radial menu selection
+  // 6. Angular Hysteresis Stick Selection while Radial is Open
   useEffect(() => {
-    if (activeWheel && wheelConfig) {
-      const idx = getActiveSegment(ctrl.leftStick.angle, ctrl.leftStick.magnitude, wheelConfig.options.length);
-      if (idx !== null) {
-        setWheelSelection(wheelConfig.options[idx]);
-      } else {
-        // Optionally keep previous selection for hysteresis, but simple threshold for now
-        // setWheelSelection(null); 
-      }
-    }
-  }, [ctrl.leftStick.angle, ctrl.leftStick.magnitude, activeWheel, wheelConfig]);
+    if (!activeWheel || wheelOptions.length === 0) return;
 
+    const newSector = getHysteresisSector(
+      ctrlState.leftStick.angle,
+      ctrlState.leftStick.magnitude,
+      wheelOptions.length,
+      activeSectorRef.current
+    );
+
+    if (newSector !== activeSectorRef.current) {
+      if (newSector !== null) {
+        hapticManager.tick(null);
+      }
+      setSelectedSectorIdx(newSector);
+    }
+  }, [ctrlState.leftStick.angle, ctrlState.leftStick.magnitude, activeWheel, wheelOptions.length]);
+
+  const activeOptionId =
+    selectedSectorIdx !== null && wheelOptions[selectedSectorIdx]
+      ? wheelOptions[selectedSectorIdx].id
+      : null;
 
   return (
-    <div className={styles.container}>
-      <header className={styles.header}>
-        <div className={styles.brand}>SP Stick &bull; Volleyball</div>
-        <div className={styles.scoreBoard}>
-           <span className={scout.activeTeam === 'A' ? styles.activeTeam : ''}>A: {scout.scoreA}</span>
-           <span className={styles.setNum}>SET {scout.currentSet}</span>
-           <span className={scout.activeTeam === 'B' ? styles.activeTeam : ''}>B: {scout.scoreB}</span>
+    <div className={styles.liveContainer}>
+      {/* Top Bar Navigation / Header */}
+      <header className={styles.topBar}>
+        <div className={styles.brandGroup}>
+          <span className={styles.brandTitle}>SP Stick</span>
+          <span className={styles.sportBadge}>Volleyball</span>
         </div>
-        <div className={styles.status}>
-          {ctrl.connected ? <span className={styles.connected}>●</span> : <span className={styles.disconnected}>○</span>}
+
+        {/* Global Match Scoreboard */}
+        <div className={styles.scoreboard}>
+          <div className={`${styles.teamScore} ${scout.activeTeam === 'A' ? styles.activeScore : ''}`}>
+            <span className={styles.teamName}>{scout.teamA}</span>
+            <span className={styles.scoreVal}>{scout.scoreA}</span>
+          </div>
+
+          <div className={styles.setIndicator}>
+            <span className={styles.setLabel}>SET {scout.currentSet}</span>
+          </div>
+
+          <div className={`${styles.teamScore} ${scout.activeTeam === 'B' ? styles.activeScore : ''}`}>
+            <span className={styles.scoreVal}>{scout.scoreB}</span>
+            <span className={styles.teamName}>{scout.teamB}</span>
+          </div>
+        </div>
+
+        {/* Controller Status Indicator */}
+        <div className={styles.topActions}>
+          <button
+            className={styles.pauseBtn}
+            onClick={() => setIsPauseMenuOpen(true)}
+            title="Session Menu"
+          >
+            <ControllerGlyph control="MENU" />
+          </button>
+          <div className={styles.connectionStatus}>
+            <span className={ctrlState.connected ? styles.dotConnected : styles.dotDisconnected} />
+            <span className={styles.controllerName}>
+              {ctrlState.connected ? profile.name : t('controller.disconnected')}
+            </span>
+          </div>
         </div>
       </header>
 
-      <main className={styles.main}>
-        {activeWheel && wheelConfig && (
-          <RadialMenu 
-            options={wheelConfig.options}
-            label={wheelConfig.label}
-            activeOption={wheelSelection}
-          />
-        )}
-        
-        {scout.status === 'SAVED' && (
-          <div className={styles.savedFeedback}>✓ {t('scout.saved')}</div>
-        )}
+      {/* Main Scouting Surface */}
+      <main className={styles.mainGrid}>
+        {/* Match Focus / Video Area */}
+        <section className={styles.matchFocusArea}>
+          <div className={styles.courtFocus}>
+            <div className={styles.netLine}>
+              <span>NET</span>
+            </div>
+            <div className={styles.courtGrid}>
+              <div className={styles.zoneMarker}>4</div>
+              <div className={styles.zoneMarker}>3</div>
+              <div className={styles.zoneMarker}>2</div>
+              <div className={styles.zoneMarker}>5</div>
+              <div className={styles.zoneMarker}>6</div>
+              <div className={styles.zoneMarker}>1</div>
+            </div>
+            <p className={styles.focusNotice}>EYES ON GAME • HANDS ON CONTROLLER</p>
+          </div>
 
-        {!activeWheel && (
-          <div className={styles.eventBuilder}>
-            <h2>{scout.activeTeam === 'A' ? t('team.a') : t('team.b')}</h2>
-            <div className={styles.builderRow}>
-               <span className={scout.currentEvent.skill ? styles.filled : styles.empty}>{scout.currentEvent.skill || t('scout.skill')}</span>
-               <span className={scout.currentEvent.originZone ? styles.filled : styles.empty}>{scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : t('scout.zone')}</span>
-               <span className={scout.currentEvent.evaluation !== undefined ? styles.filled : styles.empty}>{scout.currentEvent.evaluation !== undefined ? scout.currentEvent.evaluation : t('scout.result')}</span>
+          {/* Radial Overlay */}
+          {activeWheel && (
+            <RadialMenu
+              options={wheelOptions}
+              activeOptionId={activeOptionId}
+              categoryLabel={wheelLabel}
+              controllerHint={t('scout.release_hint', 'Release to commit')}
+            />
+          )}
+
+          {/* Transient Save / Undo Toast Notification */}
+          {scout.lastFeedback && (
+            <div className={styles.floatingFeedback}>
+              {scout.lastFeedback}
+            </div>
+          )}
+
+          {scout.saveError && (
+            <div className={styles.floatingError}>
+              ⚠️ {scout.saveError}
+            </div>
+          )}
+        </section>
+
+        {/* Live Event Feedback Panel */}
+        <aside className={styles.sidePanel}>
+          {/* Active Team Selector Banner */}
+          <div className={styles.activeTeamBanner}>
+            <span className={styles.panelSectionTitle}>{t('scout.active_team', 'ACTIVE TEAM')}</span>
+            <div className={styles.teamToggleRow}>
+              <button
+                className={`${styles.teamToggleBtn} ${scout.activeTeam === 'A' ? styles.teamBtnActive : ''}`}
+                onClick={() => scout.setActiveTeam('A')}
+              >
+                <ControllerGlyph control="LEFT_BUMPER" />
+                <span>{scout.teamA}</span>
+              </button>
+              <button
+                className={`${styles.teamToggleBtn} ${scout.activeTeam === 'B' ? styles.teamBtnActive : ''}`}
+                onClick={() => scout.setActiveTeam('B')}
+              >
+                <ControllerGlyph control="RIGHT_BUMPER" />
+                <span>{scout.teamB}</span>
+              </button>
             </div>
           </div>
-        )}
+
+          {/* Current Event Buffer Feedback */}
+          <div className={styles.currentEventCard}>
+            <span className={styles.panelSectionTitle}>{t('scout.current_event', 'CURRENT EVENT')}</span>
+            <div className={styles.eventRowSlots}>
+              {/* Skill Slot */}
+              <div className={`${styles.eventSlot} ${scout.currentEvent.skill ? styles.slotFilled : styles.slotEmpty}`}>
+                <span className={styles.slotLabel}>{t('scout.skill')}</span>
+                <span className={styles.slotValue}>
+                  {scout.currentEvent.skill
+                    ? t(`skill.${scout.currentEvent.skill}`)
+                    : '—'}
+                </span>
+                <ControllerGlyph control="FACE_SOUTH" className={styles.slotGlyph} />
+              </div>
+
+              {/* Zone Slot */}
+              <div className={`${styles.eventSlot} ${scout.currentEvent.originZone ? styles.slotFilled : styles.slotEmpty}`}>
+                <span className={styles.slotLabel}>{t('scout.zone')}</span>
+                <span className={styles.slotValue}>
+                  {scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : '—'}
+                </span>
+                <ControllerGlyph control="FACE_WEST" className={styles.slotGlyph} />
+              </div>
+
+              {/* Result Slot */}
+              <div
+                className={`${styles.eventSlot} ${
+                  scout.currentEvent.evaluation !== undefined ? styles.slotFilled : styles.slotEmpty
+                }`}
+              >
+                <span className={styles.slotLabel}>{t('scout.result')}</span>
+                <span className={styles.slotValue}>
+                  {scout.currentEvent.evaluation !== undefined
+                    ? scout.currentEvent.evaluation > 0
+                      ? '+1'
+                      : scout.currentEvent.evaluation
+                    : '—'}
+                </span>
+                <ControllerGlyph control="FACE_EAST" className={styles.slotGlyph} />
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Events (3-6 latest) */}
+          <div className={styles.recentSection}>
+            <div className={styles.recentHeader}>
+              <span className={styles.panelSectionTitle}>{t('scout.recent', 'RECENT')}</span>
+              <button
+                className={styles.undoBtn}
+                onClick={() => scout.undoLastEvent()}
+                title="Undo Last Event"
+              >
+                <ControllerGlyph control="DPAD_LEFT" />
+                <span>{t('scout.undo_short', 'Undo')}</span>
+              </button>
+            </div>
+
+            <div className={styles.recentList}>
+              {scout.recentEvents.length === 0 ? (
+                <div className={styles.emptyRecent}>{t('scout.no_events')}</div>
+              ) : (
+                scout.recentEvents.slice(0, 5).map((ev) => (
+                  <div key={ev.id} className={styles.recentRow}>
+                    <span className={styles.recentTeamBadge}>{ev.teamId}</span>
+                    <span className={styles.recentSkill}>{t(`skill.${ev.skill}`)}</span>
+                    <span className={styles.recentZone}>{ev.originZone ? `Z${ev.originZone}` : ''}</span>
+                    <span
+                      className={`${styles.recentEval} ${
+                        (ev.evaluation ?? 0) > 0
+                          ? styles.evalPos
+                          : (ev.evaluation ?? 0) < 0
+                          ? styles.evalNeg
+                          : styles.evalNeu
+                      }`}
+                    >
+                      {(ev.evaluation ?? 0) > 0 ? '+1' : ev.evaluation}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </aside>
       </main>
-      
-      <aside className={styles.sidebar}>
-         <h3>Recent</h3>
-         <ul className={styles.historyList}>
-           {scout.recentEvents.map(e => (
-             <li key={e.id} className={styles.historyItem}>
-               {e.teamId} / {e.skill} / Z{e.originZone} / {(e.evaluation ?? 0) > 0 ? '+1' : (e.evaluation ?? 0)}
-             </li>
-           ))}
-         </ul>
-      </aside>
+
+      {/* Bottom Status Bar */}
+      <footer className={styles.bottomBar}>
+        <div className={styles.bottomLeft}>
+          <span className={styles.ctrlProfile}>{profile.name}</span>
+          <span className={styles.separator}>•</span>
+          <span className={ctrlState.connected ? styles.textSuccess : styles.textDanger}>
+            {ctrlState.connected ? t('controller.connected') : t('controller.disconnected')}
+          </span>
+          {wakeLockActive && <span className={styles.wakeLockBadge}>WakeLock On</span>}
+        </div>
+
+        <div className={styles.bottomRight}>
+          <span>{t('scout.events_count', 'Events')}: {scout.recentEvents.length}</span>
+          <span className={styles.separator}>•</span>
+          <button
+            className={styles.bookmarkBtn}
+            onClick={() => scout.addBookmark()}
+            title="Bookmark Moment"
+          >
+            <ControllerGlyph control="RIGHT_STICK_BUTTON" /> 🔖
+          </button>
+        </div>
+      </footer>
+
+      {/* Pause / Session Menu Modal */}
+      {isPauseMenuOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalCard}>
+            <h2>{t('session.menu_title', 'Session Menu')}</h2>
+            <p className={styles.modalSubtitle}>{scout.sessionName}</p>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalBtnPrimary}
+                onClick={() => setIsPauseMenuOpen(false)}
+              >
+                {t('session.resume', 'Resume Match')}
+              </button>
+
+              <button
+                className={styles.modalBtn}
+                onClick={async () => {
+                  await scout.endSet();
+                  setIsPauseMenuOpen(false);
+                }}
+              >
+                {t('session.next_set', 'End Set & Start Next')}
+              </button>
+
+              <button
+                className={styles.modalBtn}
+                onClick={() => navigate('/review')}
+              >
+                {t('session.open_review', 'Event Review & Export')}
+              </button>
+
+              <button
+                className={styles.modalBtn}
+                onClick={() => navigate('/controller')}
+              >
+                {t('session.controller_settings', 'Controller Setup')}
+              </button>
+
+              <button
+                className={styles.modalBtnDanger}
+                onClick={async () => {
+                  await scout.endMatch();
+                  navigate('/');
+                }}
+              >
+                {t('session.end_match', 'End Match')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

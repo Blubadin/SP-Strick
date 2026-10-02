@@ -6,11 +6,13 @@ export type SemanticControl =
   | 'DPAD_UP' | 'DPAD_RIGHT' | 'DPAD_DOWN' | 'DPAD_LEFT'
   | 'MENU' | 'VIEW';
 
+export type ControllerType = 'xbox' | 'dualsense' | 'dualshock' | 'standard' | 'custom';
+
 export interface AxisState {
   x: number;
   y: number;
   magnitude: number;
-  angle: number;
+  angle: number; // in degrees [0, 360)
 }
 
 export interface ButtonState {
@@ -18,6 +20,27 @@ export interface ButtonState {
   pressedThisFrame: boolean;
   releasedThisFrame: boolean;
   held: boolean;
+}
+
+export interface StickConfig {
+  xAxis: number;
+  yAxis: number;
+  invertX: boolean;
+  invertY: boolean;
+  deadzone: number;
+}
+
+export interface ControllerProfile {
+  id: string;
+  name: string;
+  type: ControllerType;
+  detectedIdPatterns?: string[];
+  buttons: Partial<Record<SemanticControl, number>>;
+  leftStick: StickConfig;
+  rightStick?: StickConfig;
+  builtIn: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ControllerState {
@@ -28,16 +51,4 @@ export interface ControllerState {
   leftStick: AxisState;
   rightStick: AxisState;
   hapticActuator: GamepadHapticActuator | null;
-}
-
-export interface ControllerProfile {
-  id: string;
-  name: string;
-  type: 'xbox' | 'dualsense' | 'dualshock' | 'standard' | 'custom';
-  mapping: Record<SemanticControl, number>;
-  leftStickIndexX: number;
-  leftStickIndexY: number;
-  rightStickIndexX: number;
-  rightStickIndexY: number;
-  deadzone: number;
 }

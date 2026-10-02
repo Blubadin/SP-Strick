@@ -1,47 +1,127 @@
-.container {
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 13, 16, 0.45);
+  z-index: 1000;
+  pointer-events: none;
+  animation: fadeIn 0.12s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.wheelContainer {
+  position: relative;
+  width: clamp(260px, 60vw, 380px);
+  height: clamp(260px, 60vw, 380px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wheelRing {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: radial-gradient(circle, rgba(24, 28, 34, 0.85) 0%, rgba(18, 21, 26, 0.95) 75%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.centerHub {
+  position: absolute;
+  z-index: 10;
+  width: clamp(80px, 18vw, 110px);
+  height: clamp(80px, 18vw, 110px);
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+}
+
+.categoryTitle {
+  font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.selectionPreview {
+  font-size: clamp(0.85rem, 2.2vw, 1.05rem);
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.controllerHint {
+  font-size: clamp(0.55rem, 1.5vw, 0.65rem);
+  color: var(--text-secondary);
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+/* Sizing radius via responsive clamp */
+.sectorWrapper {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 0;
-  height: 0;
-  z-index: 100;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.centerLabel {
-  position: absolute;
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-  transform: translate(-50%, -50%);
-}
-
-.segment {
-  position: absolute;
   transform-origin: center;
-  padding: 8px 16px;
-  background: var(--surface);
+  transform: translate(-50%, -50%)
+    translate(
+      calc(var(--cos) * clamp(92px, 22vw, 140px)),
+      calc(var(--sin) * clamp(92px, 22vw, 140px))
+    )
+    scale(var(--scale, 1));
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 5;
+}
+
+.sectorContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(6px, 1.5vw, 10px) clamp(10px, 2.5vw, 16px);
+  background: rgba(24, 28, 34, 0.95);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text-primary);
-  font-weight: 500;
   white-space: nowrap;
-  transition: all 0.15s ease-out;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-  /* The inline style handles the translate, we need to counter center it */
-  margin-top: -20px;
-  margin-left: -40px; 
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-.segment.active {
+.sectorLabel {
+  font-size: clamp(0.8rem, 2vw, 0.95rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sectorSubLabel {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+
+.sectorActive .sectorContent {
   background: var(--accent);
-  color: #fff;
-  transform: scale(1.05); /* overridden by inline style though, need to fix */
-  border-color: transparent;
-  box-shadow: 0 0 15px rgba(41, 151, 255, 0.4);
+  border-color: #5bb3ff;
+  color: #ffffff;
+  box-shadow: 0 0 20px rgba(41, 151, 255, 0.45);
+}
+
+.sectorActive .sectorSubLabel {
+  color: rgba(255, 255, 255, 0.85);
 }

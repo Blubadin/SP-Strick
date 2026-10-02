@@ -1,81 +1,147 @@
 import { useControllerStore } from './ControllerStore';
-import type { SemanticControl, AxisState } from './ControllerTypes';
+import { ButtonStateMachine } from './ButtonStateMachine';
+import { applyDeadzone } from './StickNormalizer';
+import { intentDispatcher } from './ControllerIntent';
+import { hapticManager } from './HapticManager';
 
 let pollingFrame: number | null = null;
-let lastButtons: Record<number, boolean> = {};
+const buttonStateMachine = new ButtonStateMachine();
 
-function applyDeadzone(x: number, y: number, deadzone: number): AxisState {
-  let mag = Math.sqrt(x*x + y*y);
-  if (mag < deadzone) {
-    return { x: 0, y: 0, magnitude: 0, angle: 0 };
-  }
-  let normalizedMag = (mag - deadzone) / (1 - deadzone);
-  if (normalizedMag > 1) normalizedMag = 1;
-  let angle = Math.atan2(y, x) * (180 / Math.PI);
-  if (angle < 0) angle += 360;
-  // Gamepad Y is inverted (up is -1). We usually want Up as 270 or 90 depending on convention.
-  // Standard Math.atan2: Right=0, Down=90, Left=180, Up=270 (if y is positive-down).
-  return { x: (x/mag)*normalizedMag, y: (y/mag)*normalizedMag, magnitude: normalizedMag, angle };
-}
+let lastLeftAngle = 0;
+let lastLeftMag = 0;
 
-export function startGamepadPolling() {
+export function startGamepadPolling(): void {
+  if (pollingFrame !== null) return;
+
   const poll = () => {
     const { state, profile, updateState } = useControllerStore.getState();
-    if (state.connected && state.index !== null) {
-      const gp = navigator.getGamepads()[state.index];
-      if (gp) {
-        const newButtons = { ...state.buttons };
-        
-        Object.entries(profile.mapping).forEach(([semantic, physical]) => {
-          const physIdx = physical as number;
-          const btn = gp.buttons[physIdx];
-          const isPressed = btn ? (typeof btn === 'object' ? btn.pressed : btn > 0) : false;
-          const wasPressed = lastButtons[physIdx] || false;
-          
-          newButtons[semantic as SemanticControl] = {
-            pressed: isPressed,
-            pressedThisFrame: isPressed && !wasPressed,
-            releasedThisFrame: !isPressed && wasPressed,
-            held: isPressed && wasPressed
-          };
-          
-          lastButtons[physIdx] = isPressed;
-        });
 
-        const leftX = gp.axes[profile.leftStickIndexX] || 0;
-        const leftY = gp.axes[profile.leftStickIndexY] || 0;
-        const rightX = gp.axes[profile.rightStickIndexX] || 0;
-        const rightY = gp.axes[profile.rightStickIndexY] || 0;
+    if (state.connected && state.index !== null && typeof navigator !== 'undefined') {
+      const gamepads = navigator.getGamepads();
+      const gp = gamepads[state.index];
 
-        const leftStick = applyDeadzone(leftX, leftY, profile.deadzone);
-        const rightStick = applyDeadzone(rightX, rightY, profile.deadzone);
+      if (gp && gp.connected) {
+        // 1. Process Buttons with edge detection
+        const { buttons, hasChanged: buttonsChanged } = buttonStateMachine.update(
+          gp.buttons,
+          profile.buttons
+        );
 
-        updateState({ buttons: newButtons, leftStick, rightStick });
-        
-        // Dispatch custom events for semantic intents if needed, or state machine will read from store
+        // 2. Process Sticks with deadzone and inversion
+        const leftStick = applyDeadzone(
+          gp.axes[profile.leftStick.xAxis] ?? 0,
+          gp.axes[profile.leftStick.yAxis] ?? 0,
+          profile.leftStick.deadzone,
+          profile.leftStick.invertX,
+          profile.leftStick.invertY
+        );
+
+        const rightStick = profile.rightStick
+          ? applyDeadzone(
+              gp.axes[profile.rightStick.xAxis] ?? 0,
+              gp.axes[profile.rightStick.yAxis] ?? 0,
+              profile.rightStick.deadzone,
+              profile.rightStick.invertX,
+              profile.rightStick.invertY
+            )
+          : { x: 0, y: 0, magnitude: 0, angle: 0 };
+
+        // 3. Stick movement significance check (to prevent 60fps renders when idle)
+        const stickSignificantlyChanged =
+          Math.abs(leftStick.magnitude - lastLeftMag) > 0.02 ||
+          (leftStick.magnitude > 0.1 && Math.abs(leftStick.angle - lastLeftAngle) > 2) ||
+          (lastLeftMag > 0 && leftStick.magnitude === 0);
+
+        if (stickSignificantlyChanged) {
+          lastLeftMag = leftStick.magnitude;
+          lastLeftAngle = leftStick.angle;
+        }
+
+        // 4. Update React store ONLY when there is a meaningful state change
+        if (buttonsChanged || stickSignificantlyChanged) {
+          updateState({
+            buttons,
+            leftStick,
+            rightStick
+          });
+        }
+
+        // 5. Emit semantic intents
+        if (buttons.FACE_SOUTH.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'SKILL' });
+        }
+        if (buttons.FACE_WEST.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'ZONE' });
+        }
+        if (buttons.FACE_EAST.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'RESULT' });
+        }
+        if (buttons.FACE_NORTH.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'TEAM_PLAYER' });
+        }
+
+        // Quick Controls
+        if (buttons.LEFT_BUMPER.pressedThisFrame) {
+          hapticManager.tick(gp);
+          intentDispatcher.dispatch({ type: 'SELECT_TEAM_A' });
+        }
+        if (buttons.RIGHT_BUMPER.pressedThisFrame) {
+          hapticManager.tick(gp);
+          intentDispatcher.dispatch({ type: 'SELECT_TEAM_B' });
+        }
+
+        if (buttons.DPAD_UP.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'QUICK_RESULT_POSITIVE' });
+        }
+        if (buttons.DPAD_RIGHT.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'QUICK_RESULT_NEUTRAL' });
+        }
+        if (buttons.DPAD_DOWN.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'QUICK_RESULT_NEGATIVE' });
+        }
+
+        if (buttons.DPAD_LEFT.pressedThisFrame || buttons.VIEW.pressedThisFrame) {
+          hapticManager.warning(gp);
+          intentDispatcher.dispatch({ type: 'UNDO_LAST_EVENT' });
+        }
+
+        if (buttons.MENU.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'PAUSE_SESSION' });
+        }
+
+        if (buttons.LEFT_STICK_BUTTON.pressedThisFrame) {
+          intentDispatcher.dispatch({ type: 'EDIT_LAST_EVENT' });
+        }
+
+        if (buttons.RIGHT_STICK_BUTTON.pressedThisFrame) {
+          hapticManager.tick(gp);
+          intentDispatcher.dispatch({ type: 'BOOKMARK_MOMENT' });
+        }
+      } else {
+        // Disconnected mid-polling
+        buttonStateMachine.reset();
       }
     }
+
     pollingFrame = requestAnimationFrame(poll);
   };
+
   pollingFrame = requestAnimationFrame(poll);
 }
 
-export function stopGamepadPolling() {
+export function stopGamepadPolling(): void {
   if (pollingFrame !== null) {
     cancelAnimationFrame(pollingFrame);
     pollingFrame = null;
   }
+  buttonStateMachine.reset();
 }
 
-export function triggerHaptic(duration: number = 100, strong: number = 0.5, weak: number = 0.5) {
-  const state = useControllerStore.getState().state;
-  if (state.hapticActuator) {
-    // @ts-ignore
-    state.hapticActuator.playEffect("dual-rumble", {
-      startDelay: 0,
-      duration: duration,
-      weakMagnitude: weak,
-      strongMagnitude: strong
-    }).catch(() => {}); // ignore if failed
-  }
+/**
+ * Resets poller internal button history.
+ */
+export function resetPollerState(): void {
+  buttonStateMachine.reset();
+  lastLeftAngle = 0;
+  lastLeftMag = 0;
 }

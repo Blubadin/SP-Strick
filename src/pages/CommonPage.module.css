@@ -5,41 +5,79 @@
   justify-content: center;
   min-height: 100vh;
   padding: 24px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-sizing: border-box;
 }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
+  border-radius: 14px;
+  padding: 28px;
   width: 100%;
-  max-width: 480px;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
 }
 
-.card h1 {
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 24px;
+}
+
+.headerRow h1 {
   font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sportBadge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(41, 151, 255, 0.15);
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .formGroup {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .formGroup label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
 .input {
   width: 100%;
-  padding: 12px;
+  padding: 11px 14px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   color: var(--text-primary);
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
 }
 
 .input:focus {
@@ -49,17 +87,19 @@
 
 .primaryBtn, .secondaryBtn {
   width: 100%;
-  padding: 14px;
+  padding: 13px;
   border-radius: 8px;
-  font-size: 1.1rem;
-  font-weight: 500;
+  font-size: 1rem;
+  font-weight: 600;
   margin-top: 12px;
-  transition: all 0.2s;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
 .primaryBtn {
   background: var(--accent);
-  color: #fff;
+  color: #FFFFFF;
   border: none;
 }
 
@@ -77,31 +117,158 @@
   background: var(--surface-hover);
 }
 
-.statusBox {
-  text-align: center;
-  padding: 32px 0;
+.toggleLink {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
 }
 
-.successIcon {
-  font-size: 3rem;
-  color: var(--success);
+.playerSetupBox {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 8px;
+}
+
+.controllerPreviewCard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.controllerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.quickTestRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.testBtn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(41, 151, 255, 0.15);
+  border: 1px solid rgba(41, 151, 255, 0.4);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.badgeSuccess {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(52, 199, 89, 0.15);
+  color: #34C759;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badgeDanger {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 59, 48, 0.15);
+  color: #FF3B30;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* Tabs */
+.tabBar {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+.tabBtn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tabActive {
+  background: var(--bg-secondary);
+  color: var(--accent);
+}
+
+.diagBox {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
   margin-bottom: 16px;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 16px;
 }
 
 .table th {
   text-align: left;
-  padding: 12px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
 }
 
 .table td {
   padding: 12px;
-  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.actionBtn {
+  background: none;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: var(--accent);
+}
+
+.actionBtn:hover {
+  text-decoration: underline;
 }

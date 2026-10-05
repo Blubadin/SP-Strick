@@ -54,6 +54,17 @@ describe('HUD video controls', () => {
     detach();
   });
 
+  it('reports rejected transport seeks without leaking an unhandled rejection', async () => {
+    const { player, detach } = setup();
+    player.seek = vi.fn(() => Promise.reject(new Error('seek failed')));
+    render(<HudVideoControls />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Seek forward 1 second' }));
+
+    expect(await screen.findByText('Unable to seek this video.')).toBeTruthy();
+    detach();
+  });
+
   it('supports pointer capture scrubbing and clamps the timeline to its duration', async () => {
     const { player, detach } = setup();
     const setCapture = vi.fn();

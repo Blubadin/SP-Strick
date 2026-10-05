@@ -138,13 +138,13 @@ export function HudVideoControls({ focusHudHidden = false }: { focusHudHidden?: 
     <div className={styles.controlRow}>
       <output className={styles.time} aria-live="off">{formatTime(snapshot.currentTimeMs)} <span>/</span> {formatTime(snapshot.durationMs)}</output>
       <div className={styles.transport}>
-        <button type="button" aria-label="Seek back 3 seconds" disabled={!snapshot.ready} onClick={() => void videoPlayback.seekBy(-3000)}>−3s</button>
-        <button type="button" aria-label="Seek back 1 second" disabled={!snapshot.ready} onClick={() => void videoPlayback.seekBy(-1000)}>−1s</button>
+        <button type="button" aria-label="Seek back 3 seconds" disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() - 3000, true)}>−3s</button>
+        <button type="button" aria-label="Seek back 1 second" disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() - 1000, true)}>−1s</button>
         <button type="button" aria-label={snapshot.playing ? 'Pause video' : 'Play video'} className={styles.playButton} disabled={!snapshot.ready} onClick={() => videoPlayback.togglePlayback()}>
           {snapshot.playing ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
         </button>
-        <button type="button" aria-label="Seek forward 1 second" disabled={!snapshot.ready} onClick={() => void videoPlayback.seekBy(1000)}>+1s</button>
-        <button type="button" aria-label="Seek forward 3 seconds" disabled={!snapshot.ready} onClick={() => void videoPlayback.seekBy(3000)}>+3s</button>
+        <button type="button" aria-label="Seek forward 1 second" disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() + 1000, true)}>+1s</button>
+        <button type="button" aria-label="Seek forward 3 seconds" disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() + 3000, true)}>+3s</button>
       </div>
       <label className={styles.speedLabel}>Speed
         <select aria-label="Playback speed" disabled={!snapshot.ready} value={String(snapshot.rate)} onChange={(event) => videoPlayback.setPlaybackRate(Number(event.target.value))}>

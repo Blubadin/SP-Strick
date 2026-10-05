@@ -16,7 +16,7 @@ let lastControllerKey: string | null = null;
 let videoModifierActive = false;
 let videoModifierStartedAt = 0;
 let videoModifierChordUsed = false;
-let videoModifierContextEnabled = true;
+let videoModifierContextEnabled = false;
 
 const VIDEO_CONTROL_INTENTS: Partial<Record<SemanticControl, ControllerIntent>> = {
   DPAD_LEFT: { type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 },
@@ -41,6 +41,7 @@ function endVideoModifier(): void {
 
 export function setVideoModifierContextEnabled(enabled: boolean): void {
   videoModifierContextEnabled = enabled;
+  if (!enabled) endVideoModifier();
 }
 
 export function startGamepadPolling(): void {

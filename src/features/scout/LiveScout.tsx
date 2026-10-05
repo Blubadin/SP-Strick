@@ -519,9 +519,12 @@ export function LiveScout() {
       case 'SCOUT_CLEAR_ACTION': void useScoutStore.getState().clearCurrentEvent(); setInspectedEvent(null); break;
       case 'SCOUT_TOGGLE_VIDEO': videoPlayback.togglePlayback(); break;
       case 'ENTER_VIDEO_CONTROL': contextRef.current = 'VIDEO_CONTROL'; setVideoModifierContextEnabled(true); break;
-      case 'EXIT_VIDEO_CONTROL': contextRef.current = 'LIVE_SCOUT'; setVideoModifierContextEnabled(true); break;
+      case 'EXIT_VIDEO_CONTROL':
+        if (contextRef.current === 'VIDEO_CONTROL') contextRef.current = 'LIVE_SCOUT';
+        setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT');
+        break;
       case 'VIDEO_CONTROL_COMMAND':
-        if (intent.type === 'VIDEO_CONTROL_SEEK') void videoPlayback.seekBy(intent.deltaMs);
+        if (intent.type === 'VIDEO_CONTROL_SEEK') void videoPlayback.seekBy(intent.deltaMs).catch(() => undefined);
         else if (intent.type === 'VIDEO_CONTROL_TOGGLE') videoPlayback.togglePlayback();
         else if (intent.type === 'VIDEO_CONTROL_CYCLE_RATE') {
           videoPlayback.setPlaybackRate(nextVideoPlaybackRate(videoPlayback.getPlaybackRate()));
@@ -587,6 +590,7 @@ export function LiveScout() {
     return () => {
       unsubscribeIntent();
       unsubscribeController();
+      setVideoModifierContextEnabled(false);
     };
   }, [syncInteractionContext]);
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listenForGamepadConnections } from './GamepadDetector';
-import { startGamepadPolling, stopGamepadPolling } from './GamepadPoller';
+import { setVideoModifierContextEnabled, startGamepadPolling, stopGamepadPolling } from './GamepadPoller';
 import { intentDispatcher } from './ControllerIntent';
 import { STANDARD_PROFILE } from './ControllerProfile';
 import { useControllerStore } from './ControllerStore';
@@ -31,6 +31,7 @@ describe('GamepadPoller state publication', () => {
 
   beforeEach(() => {
     usePreferencesStore.setState({ ...DEFAULT_PREFERENCES });
+    setVideoModifierContextEnabled(false);
     gamepad = makeGamepad();
     const callbacks: Array<FrameRequestCallback> = [];
     vi.stubGlobal('navigator', { getGamepads: () => [gamepad] });
@@ -92,6 +93,7 @@ describe('GamepadPoller state publication', () => {
 
   it('toggles video once for a quick VIEW tap', () => {
     cleanupDetector = listenForGamepadConnections();
+    setVideoModifierContextEnabled(true);
     startGamepadPolling();
     stepFrame(0);
     (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
@@ -106,6 +108,7 @@ describe('GamepadPoller state publication', () => {
 
   it('dispatches video chords and exits on VIEW release without a second toggle', () => {
     cleanupDetector = listenForGamepadConnections();
+    setVideoModifierContextEnabled(true);
     const received: Array<{ type: string; deltaMs?: number }> = [];
     const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
     startGamepadPolling();
@@ -124,6 +127,7 @@ describe('GamepadPoller state publication', () => {
 
   it('maps the complete video chord set to seek, toggle, and rate intents', () => {
     cleanupDetector = listenForGamepadConnections();
+    setVideoModifierContextEnabled(true);
     const received: Array<{ type: string; deltaMs?: number }> = [];
     const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
     startGamepadPolling();
@@ -148,6 +152,7 @@ describe('GamepadPoller state publication', () => {
   });
   it('consumes unsupported controls while VIEW modifier is active', () => {
     cleanupDetector = listenForGamepadConnections();
+    setVideoModifierContextEnabled(true);
     startGamepadPolling();
     stepFrame(0);
     (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
@@ -169,6 +174,7 @@ describe('GamepadPoller state publication', () => {
 
   it('exits an active video modifier when polling stops or the controller disconnects', () => {
     cleanupDetector = listenForGamepadConnections();
+    setVideoModifierContextEnabled(true);
     startGamepadPolling();
     stepFrame(0);
     (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
@@ -183,6 +189,28 @@ describe('GamepadPoller state publication', () => {
     (gamepad as { connected: boolean }).connected = false;
     stepFrame(40);
     expect(intents.filter(type => type === 'VIDEO_CONTROL_EXIT')).toHaveLength(1);
+  });
+
+  it('does not enter video controls outside a live context and exits when eligibility is revoked', () => {
+    cleanupDetector = listenForGamepadConnections();
+    startGamepadPolling();
+    stepFrame(0);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    expect(intents).not.toContain('VIDEO_CONTROL_ENTER');
+
+    setVideoModifierContextEnabled(true);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
+    stepFrame(20);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(30);
+    expect(intents).toContain('VIDEO_CONTROL_ENTER');
+    setVideoModifierContextEnabled(false);
+    expect(intents.at(-1)).toBe('VIDEO_CONTROL_EXIT');
+
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
+    stepFrame(60);
+    expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(0);
   });
   it('uses gameplay shortcuts independently of calibrated physical indices', () => {
     cleanupDetector = listenForGamepadConnections();

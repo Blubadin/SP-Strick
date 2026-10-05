@@ -82,6 +82,7 @@ export function LiveScout() {
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [hudHidden, setHudHidden] = useState(false);
+  const [hudActivity, setHudActivity] = useState(0);
   const [videoPlaying, setVideoPlaying] = useState(() => videoPlayback.isPlaying());
   const [videoSourceId, setVideoSourceId] = useState(() => videoPlayback.getEventTiming().videoSourceId);
 
@@ -328,7 +329,7 @@ export function LiveScout() {
     if (!focusMode || !videoPlaying || hudHidden) return;
     const timeout = window.setTimeout(() => setHudHidden(true), 3000);
     return () => window.clearTimeout(timeout);
-  }, [focusMode, videoPlaying, hudHidden]);
+  }, [focusMode, videoPlaying, hudHidden, hudActivity]);
 
   useEffect(() => {
     if (!focusMode) return;
@@ -342,7 +343,11 @@ export function LiveScout() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [focusMode]);
 
-  const revealFocusHud = useCallback(() => setHudHidden(false), []);
+  const revealFocusHud = useCallback(() => {
+    if (!focusMode) return;
+    setHudHidden(false);
+    setHudActivity((activity) => activity + 1);
+  }, [focusMode]);
   const exitFocusMode = useCallback(() => {
     setFocusMode(false);
     setHudHidden(false);
@@ -682,7 +687,7 @@ export function LiveScout() {
             <button className={styles.focusExit} type="button" onClick={exitFocusMode}>{t('scout.exit_focus','Exit focus mode')}</button>
             {!videoSourceId && <div className={styles.focusEmpty}>{t('video.focus_empty','Add a video or continue scouting without one.')}</div>}
           </>}
-          <div className={styles.focusVideoPanel}>{scout.sessionId && <ScoutVideoPanel sessionId={scout.sessionId} />}</div>
+          <div className={styles.focusVideoPanel}>{scout.sessionId && <ScoutVideoPanel sessionId={scout.sessionId} focusHudHidden={focusMode && hudHidden} />}</div>
           {!focusMode && <>
           <div className={styles.mapToolbar}>
             <span>{mapEvents[0]?.rallyNumber ? t('scout.rally_number','Rally {{number}}',{number:mapEvents[0].rallyNumber}) : t('scout.live','Live court')}</span>

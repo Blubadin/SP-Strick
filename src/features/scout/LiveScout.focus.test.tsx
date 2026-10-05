@@ -12,7 +12,7 @@ import '../../i18n';
 vi.mock('./CourtMap', () => ({ CourtMap: () => <div data-testid="court-map" /> }));
 vi.mock('./RallyHistory', () => ({ RallyHistory: () => <div data-testid="rally-history" /> }));
 vi.mock('../video/ScoutVideoPanel', () => ({
-  ScoutVideoPanel: () => <div data-testid="video-panel" />,
+  ScoutVideoPanel: ({ focusHudHidden }: { focusHudHidden?: boolean }) => <div data-testid="video-panel" data-chrome-hidden={String(focusHudHidden ?? false)} />,
   AudioUnlockButton: () => null
 }));
 
@@ -102,15 +102,40 @@ describe('LiveScout focus mode', () => {
 
   it('hides noncritical controls after playback and reveals them on input', () => {
     attachPlayingVideo();
+    useScoutStore.setState({ sessionId: 'focus-test-session' });
     renderLiveScout();
     fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
     const liveSurface = screen.getByTestId('live-scout-surface');
 
     act(() => { vi.advanceTimersByTime(3100); });
     expect(liveSurface.getAttribute('data-hud-hidden')).toBe('true');
+    expect(screen.getByTestId('video-panel').getAttribute('data-chrome-hidden')).toBe('true');
     expect(screen.getByRole('button', { name: 'Exit focus mode' })).toBeTruthy();
 
     fireEvent.pointerMove(liveSurface);
     expect(liveSurface.getAttribute('data-hud-hidden')).toBe('false');
+    expect(screen.getByTestId('video-panel').getAttribute('data-chrome-hidden')).toBe('false');
+  });
+
+  it('restarts the three-second inactivity timeout after each interaction', () => {
+    attachPlayingVideo();
+    useControllerStore.setState((state) => ({ state: { ...state.state, connected: true } }));
+    renderLiveScout();
+    fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
+    const liveSurface = screen.getByTestId('live-scout-surface');
+
+    act(() => { vi.advanceTimersByTime(1000); });
+    fireEvent.pointerMove(liveSurface);
+    act(() => { vi.advanceTimersByTime(1100); });
+    fireEvent.touchStart(liveSurface);
+    act(() => { vi.advanceTimersByTime(1100); });
+    fireEvent.keyDown(liveSurface, { key: 'a' });
+    act(() => { vi.advanceTimersByTime(1100); });
+    act(() => intentDispatcher.dispatch({ type: 'SELECT_TEAM_A' }));
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(liveSurface.getAttribute('data-hud-hidden')).toBe('false');
+
+    act(() => { vi.advanceTimersByTime(1100); });
+    expect(liveSurface.getAttribute('data-hud-hidden')).toBe('true');
   });
 });

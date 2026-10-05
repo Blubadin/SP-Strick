@@ -38,13 +38,9 @@
 .focusMode .focusVideoPanel { position:absolute; inset:0; }
 .focusMode .focusVideoPanel > * { position:absolute; inset:0; display:block; padding:0; border:0; border-radius:0; background:#020305; }
 .focusMode .matchFocusArea :global([data-video-host]) { height:calc(100% - 58px); max-height:none; border-radius:0; }
-.focusMode .matchFocusArea :global([class*="controls"]) { position:absolute; z-index:20; right:16px; bottom:16px; left:16px; width:auto; transition:opacity .2s ease; }
-.focusHudHidden .matchFocusArea :global([class*="controls"]) { opacity:0; pointer-events:none; }
+.focusMode .matchFocusArea :global([data-video-controls]) { position:absolute; z-index:20; right:16px; bottom:16px; left:16px; width:auto; }
 .focusMode .floatingFeedback,
 .focusMode .floatingError { position:fixed; top:16px; left:50%; transform:translateX(-50%); }
-@media (prefers-reduced-motion:reduce) {
-  .focusMode .matchFocusArea :global([class*="controls"]) { transition:none; }
-}
 
 /* Top Bar */
 .topBar {

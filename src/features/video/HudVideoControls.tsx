@@ -29,7 +29,7 @@ function currentSnapshot() {
   };
 }
 
-export function HudVideoControls() {
+export function HudVideoControls({ focusHudHidden = false }: { focusHudHidden?: boolean }) {
   const [snapshot, setSnapshot] = useState(currentSnapshot);
   const [seekError, setSeekError] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -101,7 +101,7 @@ export function HudVideoControls() {
     requestSeek(target, true);
   };
 
-  return <div className={styles.controls} role="group" aria-label="Video controls" data-ready={snapshot.ready}>
+  return <div className={`${styles.controls} ${focusHudHidden ? styles.focusHudHidden : ''}`} role="group" aria-label="Video controls" data-ready={snapshot.ready} data-video-controls>
     <div
       ref={timelineRef}
       className={styles.timeline}

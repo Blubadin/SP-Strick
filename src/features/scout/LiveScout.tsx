@@ -80,6 +80,10 @@ export function LiveScout() {
   const [quickEditError, setQuickEditError] = useState(false);
   const [pauseFocusIndex, setPauseFocusIndex] = useState(0);
   const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [hudHidden, setHudHidden] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(() => videoPlayback.isPlaying());
+  const [videoSourceId, setVideoSourceId] = useState(() => videoPlayback.getEventTiming().videoSourceId);
 
   const activeSectorRef = useRef<number | null>(null);
   const activeWheelRef = useRef<ActiveWheelType | null>(null);
@@ -315,6 +319,35 @@ export function LiveScout() {
     return () => setVideoTimingProvider(() => ({}));
   }, []);
 
+  useEffect(() => videoPlayback.subscribe(() => {
+    setVideoPlaying(videoPlayback.isPlaying());
+    setVideoSourceId(videoPlayback.getEventTiming().videoSourceId);
+  }), []);
+
+  useEffect(() => {
+    if (!focusMode || !videoPlaying || hudHidden) return;
+    const timeout = window.setTimeout(() => setHudHidden(true), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [focusMode, videoPlaying, hudHidden]);
+
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setFocusMode(false);
+        setHudHidden(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [focusMode]);
+
+  const revealFocusHud = useCallback(() => setHudHidden(false), []);
+  const exitFocusMode = useCallback(() => {
+    setFocusMode(false);
+    setHudHidden(false);
+  }, []);
+
   // D-pad intents are translated above; the stick navigates the active modal at a steady repeat rate.
   useEffect(() => {
     let previousDirection: -1 | 0 | 1 = 0;
@@ -436,9 +469,10 @@ export function LiveScout() {
   );
 
   const handleIntent = useCallback((intent: ControllerIntent) => {
+    revealFocusHud();
     const route = routeLiveScoutIntent(contextRef.current, intent);
     switch (route) {
-      case 'OPEN_PAUSE_MENU': setPauseMenuOpen(true); break;
+      case 'OPEN_PAUSE_MENU': exitFocusMode(); setPauseMenuOpen(true); break;
       case 'RESUME_PAUSE_MENU': setPauseMenuOpen(false); break;
       case 'OPEN_QUICK_EDIT':
         if (useScoutStore.getState().recentEvents.length > 0) setQuickEditOpen(true);
@@ -482,6 +516,8 @@ export function LiveScout() {
     cancelQuickEdit,
     moveNavigationFocus,
     scout,
+    exitFocusMode,
+    revealFocusHud,
     setPauseMenuOpen,
     setQuickEditOpen,
     setWheelOpen
@@ -574,7 +610,16 @@ export function LiveScout() {
         controllerHint={t('scout.release_hint','Release to confirm, or tap a choice')} />;
 
   return (
-    <div className={styles.liveContainer}>
+    <div
+      className={`${styles.liveContainer} ${focusMode ? styles.focusMode : ''} ${focusMode && hudHidden ? styles.focusHudHidden : ''}`}
+      data-testid="live-scout-surface"
+      data-focus-mode={String(focusMode)}
+      data-hud-hidden={String(hudHidden)}
+      onPointerMove={revealFocusHud}
+      onPointerDown={revealFocusHud}
+      onTouchStart={revealFocusHud}
+      onKeyDown={revealFocusHud}
+    >
       {/* Top Bar Navigation / Header */}
       <header className={styles.topBar}>
         <div className={styles.brandGroup}>
@@ -601,6 +646,9 @@ export function LiveScout() {
 
         {/* Controller Status Indicator */}
         <div className={styles.topActions}>
+          <button className={styles.pauseBtn} onClick={() => { setFocusMode(true); setHudHidden(false); }} title={t('scout.focus_mode','Focus mode')}>
+            {t('scout.focus_mode','Focus mode')}
+          </button>
           <button
             className={styles.pauseBtn}
             onClick={() => setPauseMenuOpen(true)}
@@ -621,7 +669,21 @@ export function LiveScout() {
       <main className={styles.mainGrid}>
         {/* Match Focus / Video Area */}
         <section className={styles.matchFocusArea}>
-          {scout.sessionId && <ScoutVideoPanel sessionId={scout.sessionId} />}
+          {focusMode && <>
+            <div className={styles.focusScoreboard} aria-label={t('scout.score','Score')}>
+              <span>{scout.teamA}</span><strong>{scout.scoreA}</strong>
+              <span className={styles.focusSet}>{t('scout.set','Set {{set}}',{set:scout.currentSet})}</span>
+              <strong>{scout.scoreB}</strong><span>{scout.teamB}</span>
+            </div>
+            <div className={styles.focusCurrentEvent}>
+              <span>{t('scout.current_event','CURRENT EVENT')}</span>
+              <strong>{scout.currentEvent.skill ? t(skillKey(scout.currentEvent.skill)) : t('scout.skill','Skill')+' —'} · {scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : t('scout.zone','Zone')+' —'} · {scout.currentEvent.evaluation !== undefined ? scout.currentEvent.evaluation > 0 ? '+1' : scout.currentEvent.evaluation === 0 ? t('result.pass','Pass') : '−1' : t('scout.result','Result')+' —'}</strong>
+            </div>
+            <button className={styles.focusExit} type="button" onClick={exitFocusMode}>{t('scout.exit_focus','Exit focus mode')}</button>
+            {!videoSourceId && <div className={styles.focusEmpty}>{t('video.focus_empty','Add a video or continue scouting without one.')}</div>}
+          </>}
+          <div className={styles.focusVideoPanel}>{scout.sessionId && <ScoutVideoPanel sessionId={scout.sessionId} />}</div>
+          {!focusMode && <>
           <div className={styles.mapToolbar}>
             <span>{mapEvents[0]?.rallyNumber ? t('scout.rally_number','Rally {{number}}',{number:mapEvents[0].rallyNumber}) : t('scout.live','Live court')}</span>
             {inspected && <button type="button" onClick={() => setInspectedEvent(null)}>{t('scout.back_to_live','Back to live')}</button>}
@@ -634,6 +696,7 @@ export function LiveScout() {
             <span>{inspected.teamId === 'A' ? scout.teamA : scout.teamB} · {t(skillKey(inspected.skill))} · Z{inspected.originZone} · {inspected.evaluation === 0 ? t('result.pass','Pass') : inspected.evaluation === 1 ? '+1' : '−1'}</span>
             {inspected.videoTimeMs !== undefined && <span>{t('video.title','Match video')} · {formatVideoTime(inspected.videoTimeMs)}</span>}
           </div>}
+          </>}
 
           {/* Radial Overlay */}
           {activeWheel && !isQuickEditOpen && renderSelection()}
@@ -656,7 +719,7 @@ export function LiveScout() {
         </section>
 
         {/* Live Event Feedback Panel */}
-        <aside className={styles.sidePanel}>
+        {!focusMode && <aside className={styles.sidePanel}>
           {/* Active Team Selector Banner */}
           <div className={styles.activeTeamBanner}>
             <span className={styles.panelSectionTitle}>{t('scout.active_team', 'ACTIVE TEAM')}</span>
@@ -747,7 +810,7 @@ export function LiveScout() {
                 incompleteRallyIds={scout.rallies.filter(rally => rally.status === 'incomplete').map(rally => rally.id)} />
             </div>
           </div>
-        </aside>
+        </aside>}
       </main>
 
       {/* Bottom Status Bar */}

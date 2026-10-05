@@ -1,0 +1,116 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, act } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
+import { LiveScout } from './LiveScout';
+import { useScoutStore } from '../../core/scouting/ScoutStore';
+import { useControllerStore } from '../../core/controller/ControllerStore';
+import { videoPlayback, type PlaybackAdapter } from '../../core/video/VideoPlayback';
+import { intentDispatcher } from '../../core/controller/ControllerIntent';
+import '../../i18n';
+
+vi.mock('./CourtMap', () => ({ CourtMap: () => <div data-testid="court-map" /> }));
+vi.mock('./RallyHistory', () => ({ RallyHistory: () => <div data-testid="rally-history" /> }));
+vi.mock('../video/ScoutVideoPanel', () => ({
+  ScoutVideoPanel: () => <div data-testid="video-panel" />,
+  AudioUnlockButton: () => null
+}));
+
+const initialScoutState = useScoutStore.getState();
+let detachPlayback: (() => void) | undefined;
+
+function renderLiveScout() {
+  return render(<MemoryRouter><LiveScout /></MemoryRouter>);
+}
+
+function attachPlayingVideo(playingInitially = true) {
+  let playing = playingInitially;
+  const adapter: PlaybackAdapter = {
+    isReady: () => true,
+    getCurrentTimeMs: () => 1000,
+    getDurationMs: () => 20_000,
+    isPlaying: () => playing,
+    getPlaybackRate: () => 1,
+    play: () => { playing = true; },
+    pause: () => { playing = false; },
+    seek: () => {},
+    setPlaybackRate: () => {}
+  };
+  detachPlayback = videoPlayback.attach('focus-test-video', adapter);
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  useControllerStore.setState((state) => ({ state: { ...state.state, connected: false } }));
+  useScoutStore.setState({
+    ...initialScoutState,
+    sessionId: null,
+    sessionName: 'Test match',
+    currentEvent: {},
+    allEvents: [],
+    recentEvents: [],
+    rallies: []
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  detachPlayback?.();
+  detachPlayback = undefined;
+  vi.useRealTimers();
+});
+
+describe('LiveScout focus mode', () => {
+  it('enters focus mode and exits with Escape while keeping score and event summary visible', () => {
+    renderLiveScout();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
+    const liveSurface = screen.getByTestId('live-scout-surface');
+
+    expect(liveSurface.getAttribute('data-focus-mode')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Exit focus mode' })).toBeTruthy();
+    expect(screen.getByText('CURRENT EVENT')).toBeTruthy();
+    expect(screen.queryByTestId('court-map')).toBeNull();
+    expect(screen.queryByTestId('rally-history')).toBeNull();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(liveSurface.getAttribute('data-focus-mode')).toBe('false');
+    expect(screen.getByTestId('court-map')).toBeTruthy();
+  });
+
+  it('can enter without a selected video and shows a setup prompt with a working exit', () => {
+    renderLiveScout();
+    fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
+
+    expect(screen.getByText('Add a video or continue scouting without one.')).toBeTruthy();
+    act(() => attachPlayingVideo(false));
+    expect(screen.queryByText('Add a video or continue scouting without one.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Exit focus mode' }));
+    expect(screen.getByTestId('live-scout-surface').getAttribute('data-focus-mode')).toBe('false');
+  });
+
+  it('exits focus mode before opening the controller session menu', () => {
+    useControllerStore.setState((state) => ({ state: { ...state.state, connected: true } }));
+    renderLiveScout();
+    fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
+
+    act(() => intentDispatcher.dispatch({ type: 'PAUSE_SESSION' }));
+
+    expect(screen.getByTestId('live-scout-surface').getAttribute('data-focus-mode')).toBe('false');
+    expect(screen.getByRole('dialog', { name: 'Session Menu' })).toBeTruthy();
+  });
+
+  it('hides noncritical controls after playback and reveals them on input', () => {
+    attachPlayingVideo();
+    renderLiveScout();
+    fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
+    const liveSurface = screen.getByTestId('live-scout-surface');
+
+    act(() => { vi.advanceTimersByTime(3100); });
+    expect(liveSurface.getAttribute('data-hud-hidden')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Exit focus mode' })).toBeTruthy();
+
+    fireEvent.pointerMove(liveSurface);
+    expect(liveSurface.getAttribute('data-hud-hidden')).toBe('false');
+  });
+});

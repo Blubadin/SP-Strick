@@ -1,22 +1,42 @@
-.panel { width: 100%; min-width: 0; border: 1px solid var(--border-normal); border-radius: var(--radius-lg); background: var(--surface-0); padding: 16px; }
-.header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.header h2 { margin: 0; font-size: 1rem; font-weight: 600; }
-.sourceControls { display: grid; gap: 8px; }
-.sourceControls label { color: var(--text-secondary); font-size: .8rem; }
-.urlRow { display: flex; gap: 8px; }
-.urlRow input, .savedSource select { min-width: 0; border: 1px solid var(--border-normal); border-radius: var(--radius-sm); background: var(--bg-1); padding: 9px 10px; }
-.urlRow input { flex: 1; width: 0; }
-.panel button, .audioUnlock button { border: 1px solid var(--border-normal); border-radius: var(--radius-sm); padding: 9px 12px; background: var(--surface-raised); color: var(--text-primary); font-size: .8rem; }
-.panel button:hover, .audioUnlock button:hover { border-color: var(--accent); }
-.actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.savedSource { display: flex; align-items: center; gap: 8px; flex: 1; }
-.savedSource select { flex: 1; width: 0; }
-.player { width: 100%; aspect-ratio: 16/9; min-height: 200px; margin-top: 12px; background: #000; border-radius: var(--radius-sm); overflow: hidden; }
-.player video, .player iframe { display: block; width: 100%; height: 100%; border: 0; }
-.empty { padding: 22px 12px; text-align: center; color: var(--text-tertiary); font-size: .85rem; }
-.help, .message { margin: 10px 0 0; color: var(--text-secondary); font-size: .75rem; line-height: 1.5; }
-.error { margin-top: 12px; padding: 10px; border: 1px solid var(--danger); border-radius: var(--radius-sm); }
-.error p { margin: 0 0 8px; color: var(--danger); font-size: .85rem; }
-.audioUnlock { display: flex; align-items: center; gap: 8px; }
-.audioUnlock small { color: var(--text-secondary); max-width: 200px; }
-@media (max-width: 600px) { .panel { padding: 12px; } .urlRow { flex-wrap: wrap; } .urlRow input { width: 100%; flex-basis: 100%; } .header { flex-wrap: wrap; } }
+.panel { position:relative; display:grid; align-content:start; gap:8px; width:100%; min-width:0; padding:10px; border:1px solid rgb(255 255 255 / 9%); border-radius:10px; background:linear-gradient(140deg,rgb(19 24 30 / 88%),rgb(12 16 21 / 88%)); }
+.header { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:12px; }
+.headingBlock { display:flex; min-width:0; align-items:center; gap:10px; }
+.header h2 { flex:none; margin:0; color:rgb(231 239 248 / 65%); font-size:.67rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+.selectedSource { display:flex; min-width:0; align-items:baseline; gap:8px; font-size:.72rem; }
+.selectedSource span { flex:none; color:#83c6ff; font-size:.62rem; font-weight:800; letter-spacing:.08em; }
+.selectedSource strong { overflow:hidden; color:#eff6fc; font-size:.77rem; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.selectedSource i { flex:none; color:var(--text-tertiary); font-size:.67rem; font-style:normal; }
+.sourceBar { position:relative; display:flex; min-height:34px; align-items:center; justify-content:space-between; }
+.actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.panel button, .audioUnlock button { display:inline-flex; min-height:32px; align-items:center; justify-content:center; gap:6px; border:1px solid rgb(255 255 255 / 12%); border-radius:6px; padding:0 10px; color:rgb(231 239 248 / 86%); background:rgb(255 255 255 / 5%); font:600 .72rem/1.2 inherit; font-family:inherit; cursor:pointer; transition:background .12s ease,border-color .12s ease; }
+.panel button:hover, .audioUnlock button:hover { border-color:rgb(94 180 255 / 55%); background:rgb(255 255 255 / 9%); }
+.panel button:focus-visible, .audioUnlock button:focus-visible, .sourceMenu select:focus-visible, .youtubeForm input:focus-visible { outline:2px solid #5bb3ff; outline-offset:2px; }
+.sourceMenuButton { width:34px; padding:0!important; }
+.sourceMenu { position:absolute; top:calc(100% + 3px); right:0; z-index:22; display:grid; min-width:190px; gap:5px; padding:7px; border:1px solid rgb(255 255 255 / 14%); border-radius:8px; background:rgb(12 17 23 / 96%); box-shadow:0 10px 26px rgb(0 0 0 / 28%); backdrop-filter:blur(14px); }
+.sourceMenu button { justify-content:flex-start; }
+.savedSource { display:grid; gap:4px; color:var(--text-secondary); font-size:.68rem; }
+.savedSource select { width:100%; min-width:0; min-height:32px; border:1px solid rgb(255 255 255 / 12%); border-radius:5px; padding:0 8px; color:#e6edf5; background:#151d26; font:inherit; }
+.youtubeForm { display:grid; gap:5px; }
+.youtubeForm label { color:var(--text-secondary); font-size:.68rem; }
+.urlRow { display:flex; flex-wrap:wrap; gap:6px; }
+.urlRow input { flex:1; min-width:140px; min-height:32px; border:1px solid rgb(255 255 255 / 12%); border-radius:6px; padding:0 9px; color:var(--text-primary); background:#10161c; font:inherit; font-size:.74rem; }
+.urlRow input::placeholder { color:var(--text-tertiary); }
+.formCancel { opacity:.76; }
+.player { width:100%; max-height:min(52vh, 620px); aspect-ratio:16/9; min-height:150px; border-radius:7px; overflow:hidden; background:#020305; }
+.player video, .player iframe { display:block; width:100%; height:100%; border:0; object-fit:contain; }
+.empty { padding:10px 8px 12px; color:var(--text-tertiary); font-size:.72rem; }
+.help, .message { margin:0; color:var(--text-secondary); font-size:.66rem; line-height:1.4; }
+.error { display:grid; gap:7px; padding:8px 10px; border:1px solid rgb(255 102 93 / 38%); border-radius:7px; background:rgb(111 33 29 / 12%); }
+.error p { margin:0; color:#ff9b95; font-size:.75rem; line-height:1.4; }
+.audioUnlock { display:flex; align-items:center; gap:7px; }
+.audioUnlock button { min-height:29px; white-space:nowrap; }
+.audioUnlock small { max-width:200px; color:var(--text-secondary); font-size:.67rem; }
+@media (max-width:700px) {
+  .panel { padding:8px; }
+  .headingBlock { flex-wrap:wrap; gap:4px 8px; }
+  .selectedSource { width:100%; }
+  .urlRow input { flex-basis:100%; }
+  .player { min-height:120px; max-height:38vh; }
+  .audioUnlock small { max-width:130px; }
+}
+@media (prefers-reduced-motion:reduce) { .panel button, .audioUnlock button { transition:none; } }

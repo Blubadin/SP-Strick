@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScoutVideoPanel } from './ScoutVideoPanel';
 import { videoPlayback } from '../../core/video/VideoPlayback';
 
-const state = vi.hoisted(() => ({ sources: [] as Record<string, unknown>[], settings: new Map(), player: { isReady: () => true, getCurrentTimeMs: () => 2500, isPlaying: () => false, play: vi.fn(), pause: vi.fn(), seek: vi.fn(), destroy: vi.fn() } }));
+const state = vi.hoisted(() => ({ sources: [] as Record<string, unknown>[], settings: new Map(), player: { isReady: () => true, getCurrentTimeMs: () => 2500, getDurationMs: () => 90_000, isPlaying: () => false, getPlaybackRate: () => 1, play: vi.fn(), pause: vi.fn(), seek: vi.fn(), setPlaybackRate: vi.fn(), destroy: vi.fn() } }));
 vi.mock('../../core/persistence/database', () => ({ db: {
   videoSources: { where: () => ({ equals: (id: string) => ({ toArray: async () => state.sources.filter((source) => source.sessionId === id) }) }), get: async (id: string) => state.sources.find((source) => source.id === id), put: vi.fn(async (source) => { state.sources = [...state.sources.filter((item) => item.id !== source.id), source]; }), update: vi.fn(async () => 1) },
   settings: { get: async (key: string) => state.settings.get(key), put: async (entry: { key: string; value: unknown }) => state.settings.set(entry.key, entry) }
@@ -15,6 +15,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('ScoutVideoPanel', () => {
   it('rejects invalid YouTube URLs without saving a source', async () => {
     render(<ScoutVideoPanel sessionId="session" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add YouTube' }));
     fireEvent.change(screen.getByLabelText('YouTube URL'), { target: { value: 'https://evil.test/watch?v=dQw4w9WgXcQ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add YouTube video' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
@@ -22,6 +23,7 @@ describe('ScoutVideoPanel', () => {
   });
   it('saves a session YouTube source and leaves playback to the user', async () => {
     render(<ScoutVideoPanel sessionId="session" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add YouTube' }));
     fireEvent.change(screen.getByLabelText('YouTube URL'), { target: { value: 'https://youtu.be/dQw4w9WgXcQ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add YouTube video' }));
     await waitFor(() => expect(videoPlayback.getEventTiming().videoSourceId).toBe(state.sources[0]?.id));
@@ -47,11 +49,28 @@ describe('ScoutVideoPanel', () => {
   it('keeps the player host mounted when the source becomes selected', async () => {
     const { container } = render(<ScoutVideoPanel sessionId="session" />);
     const originalHost = container.querySelector('[data-video-host]');
+    fireEvent.click(screen.getByRole('button', { name: 'Add YouTube' }));
     fireEvent.change(screen.getByLabelText('YouTube URL'), { target: { value: 'https://youtu.be/dQw4w9WgXcQ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add YouTube video' }));
     await waitFor(() => expect(videoPlayback.getEventTiming().videoSourceId).toBeTruthy());
     expect(container.querySelector('[data-video-host]')).toBe(originalHost);
     expect(originalHost?.children).toHaveLength(1);
+  });
+
+  it('collapses source editing after load and shows the scouting transport', async () => {
+    render(<ScoutVideoPanel sessionId="session" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add YouTube' }));
+    fireEvent.change(screen.getByLabelText('YouTube URL'), { target: { value: 'https://youtu.be/dQw4w9WgXcQ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add YouTube video' }));
+    await waitFor(() => expect(screen.getByText('YouTube · dQw4w9WgXcQ')).toBeTruthy());
+
+    expect(screen.queryByLabelText('YouTube URL')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Video source options' }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByRole('group', { name: 'Video controls' })).toBeTruthy();
+    expect(screen.queryByText(/after reloading, your browser may ask you to select the file again/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Video source options' }));
+    expect(screen.getByRole('button', { name: 'Choose local video' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add YouTube' })).toBeTruthy();
   });
   it('revokes a pending local object URL immediately on unmount', async () => {
     const createObjectURL = vi.fn(() => 'blob:match'); const revokeObjectURL = vi.fn();

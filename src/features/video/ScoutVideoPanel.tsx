@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
+import { MoreHorizontal, X } from 'lucide-react';
 import { db, type VideoSource } from '../../core/persistence/database';
 import { audioFeedbackManager } from '../../core/preferences/AudioFeedbackManager';
 import { videoPlayback, type PlaybackAdapter } from '../../core/video/VideoPlayback';
 import { VideoError } from '../../core/video/VideoError';
 import { createNativeVideoAdapter, createYouTubeVideoAdapter, waitForNativeVideo } from '../../core/video/videoAdapters';
 import { parseYouTubeUrl, restoreLocalVideo, type LocalVideoHandle } from '../../core/video/videoSources';
+import { HudVideoControls } from './HudVideoControls';
 import styles from './ScoutVideoPanel.module.css';
 
 const subscribeAudio = (listener: () => void) => audioFeedbackManager.subscribe(listener);
@@ -32,6 +34,8 @@ export function ScoutVideoPanel({ sessionId }: { sessionId: string }) {
   const [sources, setSources] = useState<VideoSource[]>([]);
   const [selected, setSelected] = useState<VideoSource | null>(null);
   const [url, setUrl] = useState('');
+  const [showYouTubeForm, setShowYouTubeForm] = useState(false);
+  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [error, setError] = useState<string | Error>('');
   const [loading, setLoading] = useState(false);
   const host = useRef<HTMLDivElement>(null);
@@ -75,7 +79,7 @@ export function ScoutVideoPanel({ sessionId }: { sessionId: string }) {
           const file = localFiles.get(source.id) ?? await restoreLocalVideo(source.fileHandle, requestPermission);
           if (disposed || current !== generation) return;
           const element = document.createElement('video');
-          element.controls = true; element.playsInline = true; element.preload = 'metadata';
+          element.controls = false; element.playsInline = true; element.preload = 'metadata';
           element.setAttribute('aria-label', source.name);
           objectUrl = URL.createObjectURL(file);
           element.src = objectUrl;
@@ -138,7 +142,7 @@ export function ScoutVideoPanel({ sessionId }: { sessionId: string }) {
     const existing = sources.find((source) => source.kind === 'youtube' && source.videoId === videoId);
     try {
       await saveSource(existing ?? { id: crypto.randomUUID(), sessionId, kind: 'youtube', name: `YouTube · ${videoId}`, videoId, url: url.trim(), createdAt: new Date().toISOString() });
-      setUrl('');
+      setUrl(''); setShowYouTubeForm(false); setSourceMenuOpen(false);
     } catch (failure) { setError(failure instanceof Error ? failure : 'Video could not be saved.'); }
   };
 
@@ -169,27 +173,41 @@ export function ScoutVideoPanel({ sessionId }: { sessionId: string }) {
 
   return <section className={styles.panel} aria-label={t('video.title', { defaultValue: 'Match video' })}>
     <div className={styles.header}>
-      <h2>{t('video.title', { defaultValue: 'Match video' })}</h2>
+      <div className={styles.headingBlock}>
+        <h2>{t('video.title', { defaultValue: 'Match video' })}</h2>
+        {selected && <div className={styles.selectedSource}><span>{t('video.sourceLabel', { defaultValue: 'VIDEO' })}</span><strong title={selected.name}>{selected.name}</strong>{loading && <i>{t('video.loading', { defaultValue: 'Loading…' })}</i>}</div>}
+      </div>
       <AudioUnlockButton />
     </div>
-    <div className={styles.sourceControls}>
+    <div className={styles.sourceBar}>
+      {!selected ? <div className={styles.actions}>
+        <button type="button" onClick={() => setShowYouTubeForm((value) => !value)}>{t('video.addYouTubeSource', { defaultValue: 'Add YouTube' })}</button>
+        <button type="button" onClick={() => { void pickFile(); }}>{t('video.chooseLocal', { defaultValue: 'Choose local video' })}</button>
+      </div> : <button type="button" className={styles.sourceMenuButton} aria-label={t('video.sourceOptions', { defaultValue: 'Video source options' })} aria-expanded={sourceMenuOpen} onClick={() => setSourceMenuOpen((value) => !value)}>
+        {sourceMenuOpen ? <X size={18} aria-hidden="true" /> : <MoreHorizontal size={18} aria-hidden="true" />}
+      </button>}
+      {sourceMenuOpen && selected && <div className={styles.sourceMenu} role="group" aria-label={t('video.sourceOptions', { defaultValue: 'Video source options' })}>
+        {sources.length > 1 && <label className={styles.savedSource}>{t('video.source', { defaultValue: 'Video source' })}
+          <select value={selected.id} onChange={(event) => { const source = sources.find((item) => item.id === event.target.value); if (source) void activateRef.current(source).catch(() => {}); }}>
+            {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+          </select>
+        </label>}
+        <button type="button" onClick={() => { void activateRef.current(selected, true).catch(() => {}); setSourceMenuOpen(false); }}>{t('video.reload', { defaultValue: 'Reload source' })}</button>
+        <button type="button" onClick={() => { setSourceMenuOpen(false); void pickFile(); }}>{t('video.chooseLocal', { defaultValue: 'Choose local video' })}</button>
+        <button type="button" onClick={() => { setShowYouTubeForm(true); setSourceMenuOpen(false); }}>{t('video.addYouTubeSource', { defaultValue: 'Add YouTube' })}</button>
+      </div>}
+    </div>
+    {showYouTubeForm && <div className={styles.youtubeForm}>
       <label htmlFor={fieldId}>{t('video.youtubeUrl', { defaultValue: 'YouTube URL' })}</label>
       <div className={styles.urlRow}>
         <input id={fieldId} type="url" inputMode="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=…" />
         <button type="button" onClick={() => { void addYouTube(); }}>{t('video.addYouTube', { defaultValue: 'Add YouTube video' })}</button>
+        <button type="button" className={styles.formCancel} onClick={() => { setShowYouTubeForm(false); setUrl(''); }}>{t('common.cancel', { defaultValue: 'Cancel' })}</button>
       </div>
-      <div className={styles.actions}>
-        <button type="button" onClick={() => { void pickFile(); }}>{t('video.chooseLocal', { defaultValue: 'Choose local video' })}</button>
-        {sources.length > 0 && <label className={styles.savedSource}>{t('video.source', { defaultValue: 'Video source' })}
-          <select value={selected?.id ?? ''} onChange={(event) => { const source = sources.find((item) => item.id === event.target.value); if (source) void activateRef.current(source).catch(() => {}); }}>
-            {!selected && <option value="" />}
-            {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
-          </select>
-        </label>}
-      </div>
-      <input ref={fileInput} type="file" accept="video/*" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void acceptFile(file); event.target.value = ''; }} />
-    </div>
+    </div>}
+    <input ref={fileInput} type="file" accept="video/*" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void acceptFile(file); event.target.value = ''; }} />
     <div ref={host} data-video-host className={selected ? styles.player : undefined} />
+    {selected && <HudVideoControls />}
     {!selected && <div className={styles.empty}>{t('video.empty', { defaultValue: 'Add a video to capture match times with your events.' })}</div>}
     {loading && <p role="status" className={styles.message}>{t('video.loading', { defaultValue: 'Loading video…' })}</p>}
     {error && <div className={styles.error}>
@@ -199,6 +217,6 @@ export function ScoutVideoPanel({ sessionId }: { sessionId: string }) {
         {selected.kind === 'local' && <button type="button" onClick={() => { void pickFile(selected); }}>{t('video.reselect', { defaultValue: 'Reselect file' })}</button>}
       </div>}
     </div>}
-    <p className={styles.help}>{t('video.help', { defaultValue: 'Press play when ready. Local files stay on this device; after reloading, your browser may ask you to select the file again.' })}</p>
+    {!selected && <p className={styles.help}>{t('video.help', { defaultValue: 'Press play when ready. Local files stay on this device; after reloading, your browser may ask you to select the file again.' })}</p>}
   </section>;
 }

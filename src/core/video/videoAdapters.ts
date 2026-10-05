@@ -2,6 +2,9 @@ import type { PlaybackAdapter } from './VideoPlayback';
 import { VideoError, type VideoErrorCode } from './VideoError';
 export interface YouTubePlayer {
   getCurrentTime(): number;
+  getDuration?(): number;
+  getPlaybackRate?(): number;
+  setPlaybackRate?(rate: number): void;
   getPlayerState(): number;
   playVideo(): void;
   pauseVideo(): void;
@@ -16,10 +19,13 @@ export function createNativeVideoAdapter(video: HTMLVideoElement): PlaybackAdapt
   return {
     isReady: () => video.readyState >= 1 && !video.error,
     getCurrentTimeMs: () => video.currentTime * 1000,
+    getDurationMs: () => Number.isFinite(video.duration) ? video.duration * 1000 : 0,
     isPlaying: () => !video.paused && !video.ended,
+    getPlaybackRate: () => video.playbackRate || 1,
     play: () => video.play(),
     pause: () => video.pause(),
-    seek: (timeMs) => { video.currentTime = Math.min(Number.isFinite(video.duration) ? video.duration : Infinity, Math.max(0, timeMs / 1000)); }
+    seek: (timeMs) => { video.currentTime = Math.min(Number.isFinite(video.duration) ? video.duration : Infinity, Math.max(0, timeMs / 1000)); },
+    setPlaybackRate: (rate) => { video.playbackRate = rate; }
   };
 }
 
@@ -86,16 +92,19 @@ export async function createYouTubeVideoAdapter(host: HTMLElement, videoId: stri
     const adapter: DisposablePlaybackAdapter = {
       isReady: () => ready,
       getCurrentTimeMs: () => player!.getCurrentTime() * 1000,
+      getDurationMs: () => { const duration = player?.getDuration?.() ?? 0; return Number.isFinite(duration) && duration > 0 ? duration * 1000 : 0; },
       isPlaying: () => player!.getPlayerState() === 1,
+      getPlaybackRate: () => player?.getPlaybackRate?.() ?? 1,
       play: () => player!.playVideo(),
       pause: () => player?.pauseVideo(),
-      seek: (timeMs) => { player!.seekTo(Math.max(0, timeMs / 1000), true); player!.pauseVideo(); },
+      seek: (timeMs) => { player!.seekTo(Math.max(0, timeMs / 1000), true); },
+      setPlaybackRate: (rate) => { player?.setPlaybackRate?.(rate); },
       destroy: () => { ready = false; clearTimeout(timeout); player?.destroy(); }
     };
     try {
       player = new api.Player(host, {
         videoId, width: '100%', height: '100%',
-        playerVars: { autoplay: 0, playsinline: 1, controls: 1, origin: window.location.origin, start: Math.floor(Math.max(0, startTimeMs) / 1000) },
+        playerVars: { autoplay: 0, playsinline: 1, controls: 0, origin: window.location.origin, start: Math.floor(Math.max(0, startTimeMs) / 1000) },
         events: {
           onReady: () => { clearTimeout(timeout); ready = true; resolve(adapter); },
           onError: ({ data }) => fail(new VideoError(data === 100 ? 'youtubeUnavailable' : data === 101 || data === 150 ? 'youtubeEmbedding' : 'youtubePlayback',

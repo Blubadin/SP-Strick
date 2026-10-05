@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VideoPlayback, type PlaybackAdapter } from './VideoPlayback';
 
+afterEach(() => vi.useRealTimers());
+
 function adapter(): PlaybackAdapter {
-  return { isReady: () => true, getCurrentTimeMs: () => 1250, isPlaying: () => false, play: vi.fn(), pause: vi.fn(), seek: vi.fn() };
+  return { isReady: () => true, getCurrentTimeMs: () => 1250, getDurationMs: () => 0, isPlaying: () => false, getPlaybackRate: () => 1, play: vi.fn(), pause: vi.fn(), seek: vi.fn(), setPlaybackRate: vi.fn() };
 }
 describe('video event timing and source selection', () => {
   it('reads the player time directly for each committed event', () => {
@@ -45,5 +47,52 @@ describe('video event timing and source selection', () => {
     playback.togglePlayback(); await Promise.resolve();
     expect(second.play).toHaveBeenCalled();
     expect(playback.getEventTiming().videoSourceId).toBe('second');
+  });
+
+  it('exposes bounded seek, duration, playing state, and playback rate controls', async () => {
+    const playback = new VideoPlayback();
+    const player = adapter();
+    let current = 1000;
+    let playing = false;
+    let rate = 1;
+    player.getCurrentTimeMs = () => current;
+    player.getDurationMs = () => 5000;
+    player.isPlaying = () => playing;
+    player.play = vi.fn(() => { playing = true; });
+    player.pause = vi.fn(() => { playing = false; });
+    player.seek = vi.fn((time) => { current = time; });
+    player.getPlaybackRate = () => rate;
+    player.setPlaybackRate = vi.fn((value) => { rate = value; });
+    playback.attach('video', player);
+
+    expect(playback.isReady()).toBe(true);
+    expect(playback.getDurationMs()).toBe(5000);
+    await playback.seekBy(-3000);
+    expect(current).toBe(0);
+    await playback.seekTo(9000);
+    expect(current).toBe(5000);
+    await playback.play();
+    expect(playback.isPlaying()).toBe(true);
+    playback.pause();
+    expect(playback.isPlaying()).toBe(false);
+    playback.setPlaybackRate(1.5);
+    expect(playback.getPlaybackRate()).toBe(1.5);
+    expect(player.setPlaybackRate).toHaveBeenCalledWith(1.5);
+  });
+
+  it('notifies active playback subscribers at a bounded rate and stops after unsubscribe', async () => {
+    vi.useFakeTimers();
+    const playback = new VideoPlayback();
+    const listener = vi.fn();
+    const unsubscribe = playback.subscribe(listener);
+    playback.attach('video', adapter());
+    listener.mockClear();
+
+    await vi.advanceTimersByTimeAsync(150);
+    expect(listener).toHaveBeenCalled();
+    listener.mockClear();
+    unsubscribe();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(listener).not.toHaveBeenCalled();
   });
 });

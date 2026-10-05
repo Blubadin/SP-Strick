@@ -1,0 +1,22 @@
+.panel { width: 100%; min-width: 0; border: 1px solid var(--border-normal); border-radius: var(--radius-lg); background: var(--surface-0); padding: 16px; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.header h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+.sourceControls { display: grid; gap: 8px; }
+.sourceControls label { color: var(--text-secondary); font-size: .8rem; }
+.urlRow { display: flex; gap: 8px; }
+.urlRow input, .savedSource select { min-width: 0; border: 1px solid var(--border-normal); border-radius: var(--radius-sm); background: var(--bg-1); padding: 9px 10px; }
+.urlRow input { flex: 1; width: 0; }
+.panel button, .audioUnlock button { border: 1px solid var(--border-normal); border-radius: var(--radius-sm); padding: 9px 12px; background: var(--surface-raised); color: var(--text-primary); font-size: .8rem; }
+.panel button:hover, .audioUnlock button:hover { border-color: var(--accent); }
+.actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.savedSource { display: flex; align-items: center; gap: 8px; flex: 1; }
+.savedSource select { flex: 1; width: 0; }
+.player { width: 100%; aspect-ratio: 16/9; min-height: 200px; margin-top: 12px; background: #000; border-radius: var(--radius-sm); overflow: hidden; }
+.player video, .player iframe { display: block; width: 100%; height: 100%; border: 0; }
+.empty { padding: 22px 12px; text-align: center; color: var(--text-tertiary); font-size: .85rem; }
+.help, .message { margin: 10px 0 0; color: var(--text-secondary); font-size: .75rem; line-height: 1.5; }
+.error { margin-top: 12px; padding: 10px; border: 1px solid var(--danger); border-radius: var(--radius-sm); }
+.error p { margin: 0 0 8px; color: var(--danger); font-size: .85rem; }
+.audioUnlock { display: flex; align-items: center; gap: 8px; }
+.audioUnlock small { color: var(--text-secondary); max-width: 200px; }
+@media (max-width: 600px) { .panel { padding: 12px; } .urlRow { flex-wrap: wrap; } .urlRow input { width: 100%; flex-basis: 100%; } .header { flex-wrap: wrap; } }

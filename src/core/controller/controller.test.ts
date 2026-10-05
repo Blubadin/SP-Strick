@@ -7,7 +7,7 @@ import {
   angularDifference,
   DEFAULT_RADIAL_CONFIG
 } from './RadialSelector';
-import { detectProfile, STANDARD_PROFILE, XBOX_PROFILE, validateControllerProfile } from './ControllerProfile';
+import { detectProfile, STANDARD_PROFILE, XBOX_PROFILE, BUILT_IN_PROFILES, WGP12S_PROFILE, getControllerGlyph, validateControllerProfile } from './ControllerProfile';
 import type { ControllerProfile } from './ControllerTypes';
 import { useControllerStore } from './ControllerStore';
 import { hapticManager } from './HapticManager';
@@ -365,18 +365,16 @@ describe('Controller Store', () => {
 });
 
 describe('Controller Profile Detection', () => {
-  it('detects Xbox controller by ID pattern', () => {
-    const prof = detectProfile('Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)', 'standard');
-    expect(prof.type).toBe('xbox');
+  it('offers WGP12S compatible layout for all standard controllers', () => {
+    expect(BUILT_IN_PROFILES).toEqual([WGP12S_PROFILE]);
+    for (const id of ['WGP12S', 'Xbox Wireless Controller', 'DualSense Wireless Controller', 'Generic USB Joystick']) {
+      expect(detectProfile(id, 'standard')).toBe(WGP12S_PROFILE);
+    }
   });
 
-  it('detects DualSense controller by ID pattern', () => {
-    const prof = detectProfile('DualSense Wireless Controller (054c:0ce6)', 'standard');
-    expect(prof.type).toBe('dualsense');
-  });
-
-  it('falls back to Standard profile for generic standard controllers', () => {
-    const prof = detectProfile('Generic USB Joystick', 'standard');
-    expect(prof.type).toBe('standard');
+  it('uses ABXY glyphs including disconnected and stored vendor profiles', () => {
+    for (const type of ['xbox', 'dualsense', 'dualshock', 'standard', 'custom'] as const) {
+      expect(['FACE_SOUTH', 'FACE_EAST', 'FACE_WEST', 'FACE_NORTH'].map(control => getControllerGlyph(control as 'FACE_SOUTH', type))).toEqual(['A', 'B', 'X', 'Y']);
+    }
   });
 });

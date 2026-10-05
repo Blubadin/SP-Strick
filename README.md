@@ -190,4 +190,4 @@ npm run preview
 
 - **SportsScout Integration**: Export normalized `ScoutingEvent` records via standard event streams to SportsScout analytics, heatmaps, and timeline visualizers.
 - **SP Voice Compatibility**: Support voice intent ingestion into the identical `EventBuilder` pipeline.
-- **Additional Sports**: Pluggable `SportConfig` adapters for Badminton, Basketball, and Football.
+- **Volleyball Scouting**: Continue refining rally workflows, court maps, and volleyball event analytics.

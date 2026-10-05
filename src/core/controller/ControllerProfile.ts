@@ -123,12 +123,18 @@ export const DUALSHOCK_PROFILE: ControllerProfile = immutableProfile({
   builtIn: true
 });
 
-export const BUILT_IN_PROFILES: ControllerProfile[] = Object.freeze([
-  XBOX_PROFILE,
-  DUALSENSE_PROFILE,
-  DUALSHOCK_PROFILE,
-  STANDARD_PROFILE
-]) as unknown as ControllerProfile[];
+/** WGP12S uses normal Gamepad API indices with ABXY face labels. Same-layout pads are compatible. */
+export const WGP12S_PROFILE: ControllerProfile = immutableProfile({
+  ...STANDARD_PROFILE,
+  id: 'profile_wgp12s',
+  name: 'WGP12S compatible',
+  detectedIdPatterns: ['wgp12s']
+});
+
+export const BUILT_IN_PROFILES: ControllerProfile[] = Object.freeze([WGP12S_PROFILE]) as unknown as ControllerProfile[];
+
+// Retain known legacy ids for validation/migration without exposing vendor choices.
+export const LEGACY_BUILT_IN_PROFILE_IDS = [STANDARD_PROFILE.id, XBOX_PROFILE.id, DUALSENSE_PROFILE.id, DUALSHOCK_PROFILE.id];
 
 export interface ControllerProfileValidation {
   valid: boolean;
@@ -217,92 +223,20 @@ export function detectProfile(
     }
   }
 
-  // 2. Xbox detection (prioritized over generic 'wireless controller')
-  if (XBOX_PROFILE.detectedIdPatterns?.some(p => lowerId.includes(p))) {
-    return XBOX_PROFILE;
-  }
-
-  // 3. DualSense detection
-  if (DUALSENSE_PROFILE.detectedIdPatterns?.some(p => lowerId.includes(p))) {
-    return DUALSENSE_PROFILE;
-  }
-
-  // 4. DualShock detection
-  if (DUALSHOCK_PROFILE.detectedIdPatterns?.some(p => lowerId.includes(p))) {
-    return DUALSHOCK_PROFILE;
-  }
-
-  // 5. Standard Gamepad API fallback
-  if (mapping === 'standard') {
-    return STANDARD_PROFILE;
-  }
-
-  return STANDARD_PROFILE;
+  // Standard semantic indices work across controllers with the same physical layout.
+  void mapping;
+  return WGP12S_PROFILE;
 }
 
 /**
  * Controller glyph resolver for buttons based on active controller type.
  */
-export function getControllerGlyph(control: SemanticControl, type: ControllerType): string {
-  if (type === 'xbox') {
-    switch (control) {
-      case 'FACE_SOUTH': return 'A';
-      case 'FACE_EAST': return 'B';
-      case 'FACE_WEST': return 'X';
-      case 'FACE_NORTH': return 'Y';
-      case 'LEFT_BUMPER': return 'LB';
-      case 'RIGHT_BUMPER': return 'RB';
-      case 'LEFT_TRIGGER': return 'LT';
-      case 'RIGHT_TRIGGER': return 'RT';
-      case 'DPAD_UP': return '↑';
-      case 'DPAD_RIGHT': return '→';
-      case 'DPAD_DOWN': return '↓';
-      case 'DPAD_LEFT': return '←';
-      case 'VIEW': return 'View';
-      case 'MENU': return 'Menu';
-      case 'LEFT_STICK_BUTTON': return 'LS';
-      case 'RIGHT_STICK_BUTTON': return 'RS';
-    }
-  }
-
-  if (type === 'dualsense' || type === 'dualshock') {
-    switch (control) {
-      case 'FACE_SOUTH': return '✕';
-      case 'FACE_EAST': return '○';
-      case 'FACE_WEST': return '□';
-      case 'FACE_NORTH': return '△';
-      case 'LEFT_BUMPER': return 'L1';
-      case 'RIGHT_BUMPER': return 'R1';
-      case 'LEFT_TRIGGER': return 'L2';
-      case 'RIGHT_TRIGGER': return 'R2';
-      case 'DPAD_UP': return '↑';
-      case 'DPAD_RIGHT': return '→';
-      case 'DPAD_DOWN': return '↓';
-      case 'DPAD_LEFT': return '←';
-      case 'VIEW': return 'Share';
-      case 'MENU': return 'Options';
-      case 'LEFT_STICK_BUTTON': return 'L3';
-      case 'RIGHT_STICK_BUTTON': return 'R3';
-    }
-  }
-
-  // Neutral / Standard
-  switch (control) {
-    case 'FACE_SOUTH': return 'South';
-    case 'FACE_EAST': return 'East';
-    case 'FACE_WEST': return 'West';
-    case 'FACE_NORTH': return 'North';
-    case 'LEFT_BUMPER': return 'L1';
-    case 'RIGHT_BUMPER': return 'R1';
-    case 'LEFT_TRIGGER': return 'L2';
-    case 'RIGHT_TRIGGER': return 'R2';
-    case 'DPAD_UP': return '↑';
-    case 'DPAD_RIGHT': return '→';
-    case 'DPAD_DOWN': return '↓';
-    case 'DPAD_LEFT': return '←';
-    case 'VIEW': return 'Select';
-    case 'MENU': return 'Start';
-    case 'LEFT_STICK_BUTTON': return 'L3';
-    case 'RIGHT_STICK_BUTTON': return 'R3';
-  }
+export function getControllerGlyph(control: SemanticControl, _type: ControllerType = 'standard'): string {
+  const glyphs: Record<SemanticControl, string> = {
+    FACE_SOUTH: 'A', FACE_EAST: 'B', FACE_WEST: 'X', FACE_NORTH: 'Y',
+    LEFT_BUMPER: 'LB', RIGHT_BUMPER: 'RB', LEFT_TRIGGER: 'LT', RIGHT_TRIGGER: 'RT',
+    DPAD_UP: '↑', DPAD_RIGHT: '→', DPAD_DOWN: '↓', DPAD_LEFT: '←',
+    VIEW: 'View', MENU: 'Menu', LEFT_STICK_BUTTON: 'L3', RIGHT_STICK_BUTTON: 'R3'
+  };
+  return glyphs[control];
 }

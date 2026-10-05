@@ -64,25 +64,15 @@ describe('EventBuilder (Order Independence)', () => {
   });
 });
 
-describe('Scoring Policy & Point Impact Decoupling', () => {
-  it('does not alter score automatically by default (evaluation decoupled)', () => {
-    // Attack +1 without autoScore rule gives null pointImpact
-    const impact = calculatePointImpact('attack', 1, 'A', false);
-    expect(impact).toBeNull();
-
-    // Error -1 without autoScore gives null
-    const errorImpact = calculatePointImpact('receive', -1, 'A', false);
-    expect(errorImpact).toBeNull();
-  });
-
-  it('computes correct point impact only when autoScore policy is enabled', () => {
-    // Attack kill (+1) awards point to active team
-    const kill = calculatePointImpact('attack', 1, 'A', true);
-    expect(kill).toBe('TEAM_A');
-
-    // Serve error (-1) awards point to opposing team
-    const err = calculatePointImpact('serve', -1, 'A', true);
-    expect(err).toBe('TEAM_B');
+describe('Rally result point semantics', () => {
+  it.each(VOLLEYBALL_SKILLS.map(skill => skill.id))('%s uses the action team for every terminal result', (skill) => {
+    for (const enabled of [false, true]) {
+      expect(calculatePointImpact(skill, 1, 'A', enabled)).toBe('TEAM_A');
+      expect(calculatePointImpact(skill, 1, 'B', enabled)).toBe('TEAM_B');
+      expect(calculatePointImpact(skill, -1, 'A', enabled)).toBe('TEAM_B');
+      expect(calculatePointImpact(skill, -1, 'B', enabled)).toBe('TEAM_A');
+      expect(calculatePointImpact(skill, 0, 'A', enabled)).toBeNull();
+    }
   });
 });
 

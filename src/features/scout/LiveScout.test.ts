@@ -8,6 +8,14 @@ import {
 } from './LiveScoutInput';
 
 describe('LiveScout interaction context routing', () => {
+  it('routes draft clearing and video playback only in live context', () => {
+    expect(routeLiveScoutIntent('LIVE_SCOUT', {type:'CLEAR_CURRENT_ACTION'})).toBe('SCOUT_CLEAR_ACTION');
+    expect(routeLiveScoutIntent('LIVE_SCOUT', {type:'TOGGLE_VIDEO_PLAYBACK'})).toBe('SCOUT_TOGGLE_VIDEO');
+    for (const context of ['PAUSE_MENU','QUICK_EDIT','QUICK_EDIT_RADIAL','RADIAL','DISCONNECTED'] as LiveScoutInteractionContext[]) {
+      expect(routeLiveScoutIntent(context, {type:'CLEAR_CURRENT_ACTION'})).toBe('IGNORE');
+      expect(routeLiveScoutIntent(context, {type:'TOGGLE_VIDEO_PLAYBACK'})).toBe('IGNORE');
+    }
+  });
   it('turns pause-menu direction inputs into navigation instead of scouting mutations', () => {
     expect(routeLiveScoutIntent('PAUSE_MENU', { type: 'QUICK_RESULT_POSITIVE' })).toBe('PAUSE_NAVIGATE_UP');
     expect(routeLiveScoutIntent('PAUSE_MENU', { type: 'QUICK_RESULT_NEGATIVE' })).toBe('PAUSE_NAVIGATE_DOWN');

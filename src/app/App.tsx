@@ -8,7 +8,6 @@ import { BUILT_IN_PROFILES } from '../core/controller/ControllerProfile';
 import { db } from '../core/persistence/database';
 import { usePreferencesStore } from '../core/preferences/PreferencesStore';
 import { audioFeedbackManager } from '../core/preferences/AudioFeedbackManager';
-import { useScoutStore } from '../core/scouting/ScoutStore';
 import i18n from '../i18n';
 
 export default function App() {
@@ -27,7 +26,7 @@ export default function App() {
         useControllerStore.getState().hydrateCustomProfiles(profiles);
         useControllerStore.getState().setHapticsEnabled(preferences.hapticsEnabled);
         audioFeedbackManager.setEnabled(preferences.audioFeedbackEnabled);
-        useScoutStore.setState({ autoScoreEnabled: preferences.autoScoreEnabled });
+        audioFeedbackManager.setVolume(preferences.audioVolume);
         document.documentElement.lang = preferences.language;
         document.documentElement.classList.toggle('reduce-motion', preferences.reducedMotion);
         await i18n.changeLanguage(preferences.language);

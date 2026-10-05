@@ -8,6 +8,7 @@ import { intentDispatcher } from '../core/controller/ControllerIntent';
 import { useControllerStore } from '../core/controller/ControllerStore';
 import type { Player } from '../core/persistence/database';
 import { useScoutStore } from '../core/scouting/ScoutStore';
+import { audioFeedbackManager } from '../core/preferences/AudioFeedbackManager';
 import {
   advanceControllerCheck,
   getSetupSkillSelection,
@@ -129,6 +130,7 @@ export default function SetupPage() {
 
   const handleStart = async (skipControllerCheck = false) => {
     if (!skipControllerCheck && controllerCheckRef.current.status !== 'complete') return;
+    void audioFeedbackManager.unlock();
     setIsStarting(true);
     setStartError(false);
     const fallbackTeamA = t('team.a', 'Team A');

@@ -21,6 +21,7 @@ import { hapticManager } from '../core/controller/HapticManager';
 import type { ControllerProfile, SemanticControl } from '../core/controller/ControllerTypes';
 import { db } from '../core/persistence/database';
 import { exportControllerProfile, importControllerProfile } from '../core/controller/ProfilePersistence';
+import { GAMEPLAY_ACTION_LABELS, type GameplayBindings } from '../core/controller/GameplayBindings';
 import { usePreferencesStore } from '../core/preferences/PreferencesStore';
 import styles from './ControllerPage.module.css';
 
@@ -34,16 +35,6 @@ const controlNames: Record<SemanticControl, string> = {
   DPAD_UP: 'controller.dpad_up', DPAD_RIGHT: 'controller.dpad_right',
   DPAD_DOWN: 'controller.dpad_down', DPAD_LEFT: 'controller.dpad_left',
   MENU: 'controller.menu', VIEW: 'controller.view'
-};
-const controlActionKeys: Record<SemanticControl, string> = {
-  FACE_SOUTH: 'controller.action_skill', FACE_EAST: 'controller.action_result',
-  FACE_WEST: 'controller.action_zone', FACE_NORTH: 'controller.action_team_player',
-  LEFT_BUMPER: 'controller.action_team_a', RIGHT_BUMPER: 'controller.action_team_b',
-  LEFT_TRIGGER: 'controller.action_none', RIGHT_TRIGGER: 'controller.action_none',
-  LEFT_STICK_BUTTON: 'controller.action_quick_edit', RIGHT_STICK_BUTTON: 'controller.action_bookmark',
-  DPAD_UP: 'controller.action_positive', DPAD_RIGHT: 'controller.action_neutral',
-  DPAD_DOWN: 'controller.action_negative', DPAD_LEFT: 'controller.action_undo',
-  MENU: 'controller.action_pause', VIEW: 'controller.action_undo'
 };
 
 const sections: { id: ControllerSection; key: string; icon: typeof Gamepad2 }[] = [
@@ -65,8 +56,9 @@ function controlLabel(control: SemanticControl, t: TFunction) {
   return t(controlNames[control], control.replaceAll('_', ' ').toLowerCase());
 }
 
-function controlActionLabel(control: SemanticControl, t: TFunction) {
-  return t(controlActionKeys[control]);
+function controlActionLabel(control: SemanticControl, t: TFunction, bindings: GameplayBindings) {
+  const action = bindings[control];
+  return t(`controller.gameplay.${action}`, GAMEPLAY_ACTION_LABELS[action]);
 }
 
 function StickMeter({ label, rawX, rawY, x, y, deadzone }: { label: string; rawX: number; rawY: number; x: number; y: number; deadzone: number }) {
@@ -94,6 +86,7 @@ export default function ControllerPage() {
   const updateCustomProfile = useControllerStore((state) => state.updateCustomProfile);
   const deleteCustomProfile = useControllerStore((state) => state.deleteCustomProfile);
   const setHapticsEnabled = useControllerStore((state) => state.setHapticsEnabled);
+  const gameplayBindings = usePreferencesStore((state) => state.gameplayBindings);
   const preferenceHaptics = usePreferencesStore((state) => state.hapticsEnabled);
   const savePreference = usePreferencesStore((state) => state.setPreference);
 
@@ -537,7 +530,7 @@ export default function ControllerPage() {
 
             {section === 'mapping' && <>
               <div className={styles.panelTitle}><div><p className={styles.eyebrow}>{t('controller.bindings', 'BUTTON ASSIGNMENTS')}</p><h2>{t('controller.mapping', 'Mapping')}</h2></div><span className={styles.mappingCount}>{mappedControls.length} {t('controller.inputs', 'inputs')}</span></div>
-              <div className={styles.mappingList}>{ALL_SEMANTIC_CONTROLS.map((control) => <button type="button" key={control} className={`${styles.mappingRow} ${selectedControl === control ? styles.mappingSelected : ''} ${pressed(control) ? styles.mappingPressed : ''}`} onClick={() => setSelectedControl(control)}><ControllerGlyph control={control} size="small" pressed={pressed(control)} type={profile.type} /><span>{controlLabel(control, t)}</span><span className={styles.mappingHint}>{controlActionLabel(control, t)}</span><strong>{draft.buttons[control] === undefined ? '—' : getControllerGlyph(control, profile.type)}</strong></button>)}</div>
+              <div className={styles.mappingList}>{ALL_SEMANTIC_CONTROLS.map((control) => <button type="button" key={control} className={`${styles.mappingRow} ${selectedControl === control ? styles.mappingSelected : ''} ${pressed(control) ? styles.mappingPressed : ''}`} onClick={() => setSelectedControl(control)}><ControllerGlyph control={control} size="small" pressed={pressed(control)} type={profile.type} /><span>{controlLabel(control, t)}</span><span className={styles.mappingHint}>{controlActionLabel(control, t, gameplayBindings)}</span><strong>{draft.buttons[control] === undefined ? '—' : getControllerGlyph(control, profile.type)}</strong></button>)}</div>
             </>}
 
             {section === 'sticks' && <>
@@ -564,7 +557,7 @@ export default function ControllerPage() {
 
             {section === 'profiles' && <>
               <div className={styles.panelTitle}><div><p className={styles.eyebrow}>{t('controller.saved_setup', 'SAVED SETUPS')}</p><h2>{t('controller.profiles', 'Profiles')}</h2></div><button type="button" className={styles.button} onClick={() => void handleAutomaticProfile()}>{t('controller.auto_detect', 'Auto detect')}</button></div>
-              <p className={styles.profileHint}>{t('controller.profile_hint', 'Built-in profiles stay unchanged. Apply an edit to make a custom copy for this controller.')}</p>
+              <p className={styles.profileHint}>{t('controller.compatible_layout', 'WGP12S layout with A/B/X/Y labels. Controllers with the same layout are supported; use a custom profile to calibrate physical inputs.')}</p>
               <div className={styles.profileList}>{[...BUILT_IN_PROFILES, ...customProfiles].map((item) => <div key={item.id} className={`${styles.profileRow} ${item.id === profile.id ? styles.profileCurrent : ''}`}><button type="button" className={styles.profilePick} onClick={() => void selectProfile(item)}><span className={styles.profileGlyph}><Gamepad2 size={19} /></span><span><strong>{item.name}</strong><small>{t(`controller.type_${item.type}`, item.type)} {item.builtIn ? `· ${t('controller.built_in', 'Built-in')}` : `· ${t('controller.custom', 'Custom')}`}</small></span>{item.id === profile.id && <Check size={17} />}</button>{!item.builtIn && <button type="button" className={styles.iconAction} aria-label={`${t('controller.export', 'Export')} ${item.name}`} onClick={() => exportProfile(item)}><Download size={15} /></button>}</div>)}</div>
               <div className={styles.profileActions}><button type="button" className={styles.button} onClick={startWizard}><Gamepad2 size={16} />{t('controller.create_custom', 'Create custom profile')}</button><button type="button" className={styles.button} onClick={() => importInputRef.current?.click()}><Upload size={15} />{t('controller.import', 'Import')}</button><input ref={importInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => { void importProfile(event.target.files?.[0]); event.currentTarget.value = ''; }} /></div>
               {wizardStarted && <section className={styles.wizardCard}><div className={styles.wizardHead}><div><p className={styles.eyebrow}>{t('controller.custom_wizard', 'CUSTOM PROFILE WIZARD')}</p><h3>{t('controller.step_of', 'Step {{step}} of {{total}}', { step: wizardStep + 1, total: ALL_SEMANTIC_CONTROLS.length })}</h3></div><button type="button" className={styles.iconAction} aria-label={t('common.cancel', 'Cancel')} onClick={() => { setWizardStarted(false); cancelListening(); }}><X size={17} /></button></div><label className={styles.wizardName}><span>{t('controller.profile_name', 'Profile name')}</span><input value={wizardName} onChange={(event) => { setWizardName(event.target.value); wizardNameRef.current = event.target.value; }} maxLength={48} /></label><p>{t('controller.press_control', 'Press the physical control for:')} <strong>{controlLabel(ALL_SEMANTIC_CONTROLS[wizardStep], t)}</strong></p><div className={styles.wizardProgress}><i style={{ width: `${(wizardStep / ALL_SEMANTIC_CONTROLS.length) * 100}%` }} /></div><button type="button" className={styles.button} disabled={!controllerState.connected || Boolean(listeningControl)} onClick={() => startListening(ALL_SEMANTIC_CONTROLS[wizardStep])}>{listeningControl ? t('controller.listening', 'Listening…') : t('controller.capture_input', 'Listen for input')}</button></section>}
@@ -576,7 +569,7 @@ export default function ControllerPage() {
             {section === 'mapping' && selectedControl ? <>
               <p className={styles.eyebrow}>{t('controller.selected_input', 'SELECTED INPUT')}</p>
               <div className={styles.inspectorInput}><ControllerGlyph control={selectedControl} pressed={pressed(selectedControl)} type={profile.type} /><strong>{getControllerGlyph(selectedControl, profile.type)}</strong><span>{controlLabel(selectedControl, t)}</span></div>
-              <div className={styles.inspectorRow}><span>{t('controller.current_action', 'Current assignment')}</span><strong>{controlActionLabel(selectedControl, t)}</strong></div>
+              <div className={styles.inspectorRow}><span>{t('controller.current_action', 'Current assignment')}</span><strong>{controlActionLabel(selectedControl, t, gameplayBindings)}</strong></div>
               <div className={styles.inspectorRow}><span>{t('controller.binding_status', 'Binding')}</span><strong>{selectedBinding === undefined ? t('controller.unassigned', 'Unassigned') : t('controller.assigned', 'Assigned')}</strong></div>
               <button type="button" className={styles.primaryButton} disabled={!controllerState.connected || Boolean(listeningControl)} onClick={() => startListening(selectedControl)}>{listeningControl === selectedControl ? t('controller.listening', 'Listening…') : t('controller.change_binding', 'Change binding')}</button>
               <button type="button" className={styles.secondaryButton} onClick={() => updateDraft((value) => ({ ...value, buttons: { ...value.buttons, [selectedControl]: STANDARD_PROFILE.buttons[selectedControl] } }))}><RotateCcw size={14} />{t('controller.reset_binding', 'Reset binding')}</button>

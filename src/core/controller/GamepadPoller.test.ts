@@ -5,6 +5,7 @@ import { intentDispatcher } from './ControllerIntent';
 import { STANDARD_PROFILE } from './ControllerProfile';
 import { useControllerStore } from './ControllerStore';
 import { createInitialButtonMap } from './ButtonStateMachine';
+import { usePreferencesStore, DEFAULT_PREFERENCES } from '../preferences/PreferencesStore';
 import { rawGamepadSnapshotStore } from './RawGamepadSnapshot';
 
 function makeGamepad() {
@@ -13,7 +14,7 @@ function makeGamepad() {
     index: 0,
     mapping: 'standard',
     connected: true,
-    buttons: Array.from({ length: 16 }, () => ({ pressed: false, touched: false, value: 0 })),
+    buttons: Array.from({ length: 18 }, () => ({ pressed: false, touched: false, value: 0 })),
     axes: [0, 0, 0, 0],
     vibrationActuator: null,
     hapticActuators: []
@@ -29,6 +30,7 @@ describe('GamepadPoller state publication', () => {
   let emitGamepadEvent: (type: string) => void;
 
   beforeEach(() => {
+    usePreferencesStore.setState({ ...DEFAULT_PREFERENCES });
     gamepad = makeGamepad();
     const callbacks: Array<FrameRequestCallback> = [];
     vi.stubGlobal('navigator', { getGamepads: () => [gamepad] });
@@ -70,6 +72,47 @@ describe('GamepadPoller state publication', () => {
     unsubscribe?.();
     rawGamepadSnapshotStore.reset();
     vi.unstubAllGlobals();
+  });
+
+  it('routes trigger, Pass, and video shortcuts once per press', () => {
+    cleanupDetector = listenForGamepadConnections();
+    startGamepadPolling();
+    stepFrame();
+    for (const index of [6, 7, 8, 15]) {
+      (gamepad.buttons as GamepadButton[])[index] = { pressed: true, touched: true, value: 1 };
+    }
+    stepFrame();
+    stepFrame();
+    expect(intents).toEqual(expect.arrayContaining([
+      'CLEAR_CURRENT_ACTION', 'QUICK_RESULT_NEUTRAL', 'TOGGLE_VIDEO_PLAYBACK'
+    ]));
+    expect(intents.filter(type => type === 'QUICK_RESULT_NEUTRAL')).toHaveLength(2);
+    expect(intents).toHaveLength(4);
+  });
+
+  it('uses gameplay shortcuts independently of calibrated physical indices', () => {
+    cleanupDetector = listenForGamepadConnections();
+    useControllerStore.getState().setProfile({ ...STANDARD_PROFILE, buttons: { ...STANDARD_PROFILE.buttons, LEFT_TRIGGER: 17 } });
+    usePreferencesStore.setState({ gameplayBindings: {
+      ...DEFAULT_PREFERENCES.gameplayBindings,
+      LEFT_TRIGGER: 'BOOKMARK_MOMENT', RIGHT_STICK_BUTTON: 'CLEAR_CURRENT_ACTION'
+    } });
+    (gamepad.buttons as GamepadButton[])[17] = { pressed: true, touched: true, value: 1 };
+    startGamepadPolling();
+    stepFrame();
+    expect(intents).toEqual(['BOOKMARK_MOMENT']);
+  });
+
+  it('identifies the physical opener when a gameplay shortcut opens a wheel', () => {
+    cleanupDetector = listenForGamepadConnections();
+    usePreferencesStore.setState({ gameplayBindings: { ...DEFAULT_PREFERENCES.gameplayBindings, LEFT_TRIGGER: 'SKILL' } });
+    const received: unknown[] = [];
+    const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
+    (gamepad.buttons as GamepadButton[])[6] = { pressed: true, touched: true, value: 1 };
+    startGamepadPolling();
+    stepFrame();
+    stopListening();
+    expect(received).toEqual([{ type: 'OPEN_RADIAL', category: 'SKILL', control: 'LEFT_TRIGGER' }]);
   });
 
   it('publishes right-stick movement even when the left stick is idle', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ScoutingEvent } from './ScoutingEvent';
-import { recalculateScoreTimeline } from './scoreTimeline';
+import { recalculateScoreTimeline, recalculateScoreState } from './scoreTimeline';
 
 function event(
   id: string,
@@ -52,5 +52,22 @@ describe('recalculateScoreTimeline', () => {
     recalculateScoreTimeline([original]);
 
     expect(original).toEqual(before);
+  });
+
+  it('returns final scores with trailing manual corrections even when all events are removed', () => {
+    const result = recalculateScoreState([], { '1': { teamA: 5, teamB: 3 } }, [
+      { setNumber: 1, afterTimestamp: 10, teamA: 2, teamB: 4 }
+    ]);
+    expect(result.events).toEqual([]);
+    expect(result.scoresBySet.get(1)).toEqual({ teamA: 7, teamB: 7 });
+  });
+
+  it('positions a manual correction after its anchor even when events share a timestamp', () => {
+    const result = recalculateScoreState([event('first', 10, 1, 'TEAM_A'), event('second', 10, 1, 'TEAM_B')], {}, [
+      { setNumber: 1, afterEventId: 'first', afterTimestamp: 10, teamA: 4, teamB: 2 }
+    ]);
+    expect(result.events[0].scoreAfter).toEqual({ teamA: 1, teamB: 0 });
+    expect(result.events[1].scoreBefore).toEqual({ teamA: 5, teamB: 2 });
+    expect(result.scoresBySet.get(1)).toEqual({ teamA: 5, teamB: 3 });
   });
 });

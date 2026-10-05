@@ -1,6 +1,23 @@
 import Dexie, { type Table } from 'dexie';
 import type { ScoutingEvent } from '../scouting/ScoutingEvent';
 import type { ControllerProfile } from '../controller/ControllerTypes';
+import type { Rally } from '../scouting/Rally';
+import type { Score, ScoreAdjustment } from '../scouting/scoreTimeline';
+
+export interface VideoSource {
+  id: string;
+  sessionId: string;
+  kind: 'youtube' | 'local';
+  name: string;
+  url?: string;
+  videoId?: string;
+  fileName?: string;
+  fileSize?: number;
+  lastModified?: number;
+  fileHandle?: unknown;
+  createdAt: string;
+  lastPositionMs?: number;
+}
 
 export interface Player {
   id: string;
@@ -27,6 +44,12 @@ export interface Session {
   status: 'active' | 'ended';
   /** Kept in sync for compatibility with clients that still query the v2 field. */
   active?: boolean;
+  /** Manual/unrecorded points, independent of editable action contributions. */
+  scoreBaselines?: Record<string, Score>;
+  scoreAdjustments?: ScoreAdjustment[];
+  scoutingDraft?: Partial<ScoutingEvent>;
+  scoutingTeam?: 'A' | 'B';
+  scoutingPlayerId?: string;
 }
 
 type LegacySessionRecord = Record<string, unknown>;
@@ -82,9 +105,11 @@ export class SPStickDatabase extends Dexie {
   customProfiles!: Table<ControllerProfile, string>;
   bookmarks!: Table<SessionBookmark, string>;
   settings!: Table<AppSetting, string>;
+  rallies!: Table<Rally, string>;
+  videoSources!: Table<VideoSource, string>;
 
-  constructor() {
-    super('SPStickDatabase');
+  constructor(name = 'SPStickDatabase') {
+    super(name);
 
     // Schema Version 1 (preserves backward compatibility)
     this.version(1).stores({
@@ -115,6 +140,32 @@ export class SPStickDatabase extends Dexie {
           Object.assign(session, migrateSessionForV3(session as LegacySessionRecord));
         })
       );
+
+    this.version(4).stores({
+      events: 'id, sessionId, matchId, timestamp, teamId, skill, rallyId, videoSourceId',
+      sessions: 'id, createdAt, updatedAt, status',
+      customProfiles: 'id, name, type',
+      bookmarks: 'id, sessionId, timestamp',
+      settings: 'key',
+      rallies: 'id, sessionId, [sessionId+setNumber], status',
+      videoSources: 'id, sessionId'
+    }).upgrade(async transaction => {
+      // Legacy rows stay untouched. Their evaluation was quality, not a rally result.
+      const events = await transaction.table('events').toArray() as ScoutingEvent[];
+      await transaction.table('sessions').toCollection().modify((session: Session) => {
+        if (session.scoreBaselines) return;
+        const baselines: Record<string, Score> = {};
+        for (const event of events.filter(e => e.sessionId === session.id).sort((a, b) => a.timestamp - b.timestamp)) {
+          baselines[event.setNumber] ??= { ...(event.scoreBefore ?? { teamA: 0, teamB: 0 }) };
+        }
+        const current = events.filter(e => e.sessionId === session.id && e.setNumber === (session.currentSet || 1));
+        baselines[session.currentSet || 1] = {
+          teamA: (session.scoreA || 0) - current.filter(e => e.pointImpact === 'TEAM_A').length,
+          teamB: (session.scoreB || 0) - current.filter(e => e.pointImpact === 'TEAM_B').length
+        };
+        session.scoreBaselines = baselines;
+      });
+    });
   }
 }
 

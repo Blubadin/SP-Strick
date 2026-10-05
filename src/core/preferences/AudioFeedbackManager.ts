@@ -7,7 +7,9 @@ function createBrowserAudioContext(): AudioContext | null {
 }
 
 export class AudioFeedbackManager {
-  private enabled = false;
+  private enabled = true;
+  private volume = 0.7;
+  private listeners = new Set<() => void>();
   private context: AudioContext | null = null;
   private readonly createContext: AudioContextFactory;
 
@@ -23,15 +25,52 @@ export class AudioFeedbackManager {
     return this.enabled;
   }
 
+  setVolume(volume: number): void {
+    if (Number.isFinite(volume)) this.volume = Math.min(1, Math.max(0, volume));
+  }
+
+  isReady(): boolean { return this.context?.state === 'running'; }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  private notify(): void { this.listeners.forEach((listener) => listener()); }
+
+  private getContext(): AudioContext | null {
+    if (!this.context) {
+      this.context = this.createContext();
+      this.context?.addEventListener?.('statechange', () => this.notify());
+    }
+    return this.context;
+  }
+
+  async unlock(): Promise<boolean> {
+    try {
+      const context = this.getContext();
+      if (context && context.state !== 'running') await context.resume();
+      this.notify();
+      return this.isReady();
+    } catch { this.notify(); return false; }
+  }
+
   playCommitTone(): void {
-    if (!this.enabled) return;
+    if (!this.enabled || this.volume === 0) return;
 
     try {
-      this.context ||= this.createContext();
-      if (!this.context) return;
-      const context = this.context;
-      if (context.state === 'suspended') void context.resume();
+      const context = this.getContext();
+      if (!context) return;
+      if (context.state !== 'running') {
+        void this.unlock().then((ready) => { if (ready && this.enabled && this.volume > 0) this.scheduleTone(context); });
+        return;
+      }
+      this.scheduleTone(context);
+    } catch { this.notify(); }
+  }
 
+  private scheduleTone(context: AudioContext): void {
+    try {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const startAt = context.currentTime;
@@ -39,7 +78,7 @@ export class AudioFeedbackManager {
 
       oscillator.type = 'sine';
       oscillator.frequency.value = 740;
-      gain.gain.setValueAtTime(0.035, startAt);
+      gain.gain.setValueAtTime(0.05 * this.volume, startAt);
       gain.gain.exponentialRampToValueAtTime(0.001, endAt);
       oscillator.connect(gain);
       gain.connect(context.destination);

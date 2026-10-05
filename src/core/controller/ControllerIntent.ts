@@ -1,7 +1,9 @@
+import type { SemanticControl } from './ControllerTypes';
+
 export type RadialCategory = 'SKILL' | 'ZONE' | 'RESULT' | 'TEAM_PLAYER';
 
 export type ControllerIntent =
-  | { type: 'OPEN_RADIAL'; category: RadialCategory }
+  | { type: 'OPEN_RADIAL'; category: RadialCategory; control?: SemanticControl }
   | { type: 'RADIAL_SELECTION_CHANGED'; category: RadialCategory; sectorIndex: number; option: string }
   | { type: 'RADIAL_COMMIT'; category: RadialCategory; option: string }
   | { type: 'RADIAL_CANCEL'; category: RadialCategory }
@@ -13,7 +15,9 @@ export type ControllerIntent =
   | { type: 'UNDO_LAST_EVENT' }
   | { type: 'EDIT_LAST_EVENT' }
   | { type: 'BOOKMARK_MOMENT' }
-  | { type: 'PAUSE_SESSION' };
+  | { type: 'PAUSE_SESSION' }
+  | { type: 'CLEAR_CURRENT_ACTION' }
+  | { type: 'TOGGLE_VIDEO_PLAYBACK' };
 
 export type IntentListener = (intent: ControllerIntent) => void;
 

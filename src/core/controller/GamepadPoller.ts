@@ -4,6 +4,9 @@ import { applyDeadzone } from './StickNormalizer';
 import { intentDispatcher } from './ControllerIntent';
 import { hapticManager } from './HapticManager';
 import { rawGamepadSnapshotStore } from './RawGamepadSnapshot';
+import { usePreferencesStore } from '../preferences/PreferencesStore';
+import { gameplayActionIntent } from './GameplayBindings';
+import { ALL_SEMANTIC_CONTROLS } from './ButtonStateMachine';
 import type { AxisState } from './ControllerTypes';
 
 let pollingFrame: number | null = null;
@@ -78,56 +81,15 @@ export function startGamepadPolling(): void {
           });
         }
 
-        // 5. Emit semantic intents
-        if (buttons.FACE_SOUTH.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'SKILL' });
-        }
-        if (buttons.FACE_WEST.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'ZONE' });
-        }
-        if (buttons.FACE_EAST.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'RESULT' });
-        }
-        if (buttons.FACE_NORTH.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'TEAM_PLAYER' });
-        }
-
-        // Quick Controls
-        if (buttons.LEFT_BUMPER.pressedThisFrame) {
-          hapticManager.tick(gp);
-          intentDispatcher.dispatch({ type: 'SELECT_TEAM_A' });
-        }
-        if (buttons.RIGHT_BUMPER.pressedThisFrame) {
-          hapticManager.tick(gp);
-          intentDispatcher.dispatch({ type: 'SELECT_TEAM_B' });
-        }
-
-        if (buttons.DPAD_UP.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'QUICK_RESULT_POSITIVE' });
-        }
-        if (buttons.DPAD_RIGHT.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'QUICK_RESULT_NEUTRAL' });
-        }
-        if (buttons.DPAD_DOWN.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'QUICK_RESULT_NEGATIVE' });
-        }
-
-        if (buttons.DPAD_LEFT.pressedThisFrame || buttons.VIEW.pressedThisFrame) {
-          hapticManager.warning(gp);
-          intentDispatcher.dispatch({ type: 'UNDO_LAST_EVENT' });
-        }
-
-        if (buttons.MENU.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'PAUSE_SESSION' });
-        }
-
-        if (buttons.LEFT_STICK_BUTTON.pressedThisFrame) {
-          intentDispatcher.dispatch({ type: 'EDIT_LAST_EVENT' });
-        }
-
-        if (buttons.RIGHT_STICK_BUTTON.pressedThisFrame) {
-          hapticManager.tick(gp);
-          intentDispatcher.dispatch({ type: 'BOOKMARK_MOMENT' });
+        // Gameplay assignments use semantic controls; physical calibration remains in the profile.
+        const bindings = usePreferencesStore.getState().gameplayBindings;
+        for (const control of ALL_SEMANTIC_CONTROLS) {
+          if (!buttons[control].pressedThisFrame) continue;
+          const actionIntent = gameplayActionIntent(bindings[control]);
+          const intent = actionIntent.type === 'OPEN_RADIAL' ? { ...actionIntent, control } : actionIntent;
+          if (intent.type === 'UNDO_LAST_EVENT') hapticManager.warning(gp);
+          else if (intent.type === 'SELECT_TEAM_A' || intent.type === 'SELECT_TEAM_B' || intent.type === 'BOOKMARK_MOMENT') hapticManager.tick(gp);
+          intentDispatcher.dispatch(intent);
         }
       } else {
         // Disconnected mid-polling

@@ -6,8 +6,11 @@ export interface ScoutingEvent {
   timestamp: number;
   createdAt: string;
   videoTimeMs?: number;
+  videoSourceId?: string;
   setNumber: number;
   rallyNumber?: number;
+  rallyId?: string;
+  actionIndex?: number;
   teamId: string;
   playerId?: string;
   skill: string;

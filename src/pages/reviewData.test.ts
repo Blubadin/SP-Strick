@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ScoutingEvent } from '../core/scouting/ScoutingEvent';
 import type { Session } from '../core/persistence/database';
-import { csvForEvents, resolvePlayer, sessionExportFilename } from './reviewData';
+import { csvForEvents, formatVideoTime, resolvePlayer, resultLabel, sessionExportFilename } from './reviewData';
 
 const session = {
   id: 's1', name: 'Test', sport: 'volleyball', matchId: 'm1', createdAt: '', updatedAt: '',
@@ -28,6 +28,31 @@ describe('review export helpers', () => {
     expect(csv.startsWith('\uFEFF')).toBe(true);
     expect(csv).toContain('"line, hard"');
     expect(csv).toContain('"Team, B"');
+  });
+
+  it('exports rally order and video timing and labels a zero evaluation as Pass', () => {
+    const rallyEvent = {
+      ...event,
+      evaluation: 0,
+      pointImpact: null,
+      rallyId: 'rally-2',
+      rallyNumber: 2,
+      actionIndex: 4,
+      videoSourceId: 'youtube-match-1',
+      videoTimeMs: 87_500
+    } satisfies ScoutingEvent;
+    const csv = csvForEvents([rallyEvent], session);
+    const [header, row] = csv.replace(/^\uFEFF/, '').split('\r\n');
+
+    expect(header).toContain('rallyNumber');
+    expect(header).toContain('actionIndex');
+    expect(header).toContain('videoSourceId');
+    expect(header).toContain('videoTimeMs');
+    expect(row).toContain('rally-2');
+    expect(row).toContain('youtube-match-1');
+    expect(row).toContain('87500');
+    expect(resultLabel(0)).toBe('Pass');
+    expect(formatVideoTime(87_500)).toBe('1:27.5');
   });
 
   it('keeps Unicode team names in a safe filename', () => {

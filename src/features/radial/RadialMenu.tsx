@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from './RadialMenu.module.css';
 
 export interface RadialOptionItem {
@@ -12,14 +13,19 @@ interface RadialMenuProps {
   activeOptionId: string | null;
   categoryLabel: string;
   controllerHint?: string;
+  size?: 'normal' | 'large' | 'extraLarge';
+  onChoose?: (item:RadialOptionItem) => void;
+  onCancel?: () => void;
 }
 
 export function RadialMenu({
   options,
   activeOptionId,
   categoryLabel,
-  controllerHint = 'Release to confirm'
+  controllerHint = 'Release to confirm',
+  size = 'large', onChoose, onCancel
 }: RadialMenuProps) {
+  const {t} = useTranslation();
   const count = options.length;
 
   const sectors = useMemo(() => {
@@ -42,7 +48,7 @@ export function RadialMenu({
 
   return (
     <div className={styles.overlay}>
-      <div className={styles.wheelContainer}>
+      <div className={styles.wheelContainer} data-size={size}>
         {/* Subtle backdrop disc */}
         <div className={styles.wheelRing} />
 
@@ -54,6 +60,7 @@ export function RadialMenu({
           ) : (
             <span className={styles.controllerHint}>{controllerHint}</span>
           )}
+          {onCancel && <button type="button" className={styles.cancelButton} onClick={onCancel}>{t('common.cancel','Cancel')}</button>}
         </div>
 
         {/* Radial items */}
@@ -72,10 +79,10 @@ export function RadialMenu({
                 } as React.CSSProperties
               }
             >
-              <div className={styles.sectorContent}>
+              <button type="button" className={styles.sectorContent} aria-pressed={isActive} onClick={() => onChoose?.(options[sec.index])}>
                 <span className={styles.sectorLabel}>{sec.label}</span>
                 {sec.subLabel && <span className={styles.sectorSubLabel}>{sec.subLabel}</span>}
-              </div>
+              </button>
             </div>
           );
         })}

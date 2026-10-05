@@ -7,6 +7,7 @@
   background: rgba(11, 13, 16, 0.45);
   z-index: 1000;
   pointer-events: none;
+  container-type: size;
   animation: fadeIn 0.12s ease-out;
 }
 
@@ -17,12 +18,16 @@
 
 .wheelContainer {
   position: relative;
-  width: clamp(260px, 60vw, 380px);
-  height: clamp(260px, 60vw, 380px);
+  --target-size:560px;
+  --wheel-diameter:min(90cqw,88cqh,var(--target-size));
+  width:var(--wheel-diameter);
+  height:var(--wheel-diameter);
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.wheelContainer[data-size='normal'] { --target-size:440px; }
+.wheelContainer[data-size='extraLarge'] { --target-size:660px; }
 
 .wheelRing {
   position: absolute;
@@ -38,8 +43,8 @@
 .centerHub {
   position: absolute;
   z-index: 10;
-  width: clamp(80px, 18vw, 110px);
-  height: clamp(80px, 18vw, 110px);
+  width:26%;
+  height:26%;
   border-radius: 50%;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -53,7 +58,7 @@
 }
 
 .categoryTitle {
-  font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+  font-size:clamp(11px,2.4cqw,14px);
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -61,14 +66,14 @@
 }
 
 .selectionPreview {
-  font-size: clamp(0.85rem, 2.2vw, 1.05rem);
+  font-size:clamp(16px,3cqw,22px);
   font-weight: 700;
   color: var(--accent);
   margin-top: 2px;
 }
 
 .controllerHint {
-  font-size: clamp(0.55rem, 1.5vw, 0.65rem);
+  font-size:12px;
   color: var(--text-secondary);
   opacity: 0.8;
   margin-top: 2px;
@@ -82,8 +87,8 @@
   transform-origin: center;
   transform: translate(-50%, -50%)
     translate(
-      calc(var(--cos) * clamp(92px, 22vw, 140px)),
-      calc(var(--sin) * clamp(92px, 22vw, 140px))
+      calc(var(--cos) * var(--wheel-diameter) * .36),
+      calc(var(--sin) * var(--wheel-diameter) * .36)
     )
     scale(var(--scale, 1));
   transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
@@ -100,20 +105,27 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text-primary);
-  white-space: nowrap;
+  width:calc(var(--wheel-diameter) * .25);
+  min-height:calc(var(--wheel-diameter) * .14);
+  white-space:normal;
+  font-family:inherit;
+  text-align:center;
+  pointer-events:auto;
+  cursor:pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .sectorLabel {
-  font-size: clamp(0.8rem, 2vw, 0.95rem);
+  font-size:clamp(15px,3cqw,22px);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .sectorSubLabel {
-  font-size: 0.65rem;
+  font-size:12px;
   color: var(--text-secondary);
 }
+.cancelButton { pointer-events:auto; margin-top:8px; border:0; background:transparent; color:var(--text-secondary); text-decoration:underline; cursor:pointer; font-size:11px; }
 
 .sectorActive .sectorContent {
   background: var(--accent);

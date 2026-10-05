@@ -6,6 +6,7 @@ import AppShell from '../components/AppShell';
 import { db, type Session } from '../core/persistence/database';
 import type { ScoutingEvent } from '../core/scouting/ScoutingEvent';
 import { useScoutStore } from '../core/scouting/ScoutStore';
+import { formatVideoTime } from '../features/scout/rallyDisplay';
 import { jsonForEvents, csvForEvents, resolvePlayer, sessionExportFilename } from './reviewData';
 import styles from './ReviewPage.module.css';
 
@@ -171,18 +172,23 @@ export default function ReviewPage() {
                 <table className={styles.table}>
                   <thead><tr><th>{t('review.time', 'Time')}</th><th>{t('review.set', 'Set')}</th><th>{t('review.team', 'Team')}</th><th>{t('review.player', 'Player')}</th><th>{t('review.skill', 'Skill')}</th><th>{t('review.zone', 'Zone')}</th><th>{t('review.result', 'Result')}</th><th>{t('review.point', 'Point')}</th><th><span className={styles.srOnly}>{t('review.actions', 'Actions')}</span></th></tr></thead>
                   <tbody>{filteredEvents.map((event) => <tr key={event.id}>
-                    <td>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                    <td><div className={styles.timeDetails}><time>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
+                      {event.rallyNumber !== undefined && <small>{t('scout.rally_number', 'Rally {{number}}', { number: event.rallyNumber })} · #{event.actionIndex ?? '—'}</small>}
+                      {event.videoTimeMs !== undefined && <small>▶ {formatVideoTime(event.videoTimeMs)}</small>}
+                      {event.scoreBefore && <small>{event.scoreBefore.teamA}–{event.scoreBefore.teamB} → {event.scoreAfter?.teamA ?? event.scoreBefore.teamA}–{event.scoreAfter?.teamB ?? event.scoreBefore.teamB}</small>}
+                    </div></td>
                     <td>{event.setNumber}</td><td><span className={styles.teamBadge} data-team={event.teamId}>{teamName(event.teamId)}</span></td>
                     <td>{resolvePlayer(session, event)}</td><td>{t(`skill.${event.skill}`, event.skill)}</td><td>{event.originZone ? `Z${event.originZone}` : '—'}</td>
-                    <td><span className={styles.evaluation} data-value={event.evaluation ?? 0}>{(event.evaluation ?? 0) > 0 ? '+1' : event.evaluation ?? '—'}</span></td>
+                    <td><span className={styles.evaluation} data-value={event.evaluation ?? 0}>{event.evaluation === 0 ? t('result.pass', 'Pass') : event.evaluation === 1 ? '+1' : event.evaluation === -1 ? '−1' : '—'}</span></td>
                     <td>{event.pointImpact ? teamName(event.pointImpact === 'TEAM_A' ? 'A' : 'B') : '—'}</td>
                     <td><div className={styles.rowActions}><button type="button" aria-label={`${t('common.edit', 'Edit')} ${t(`skill.${event.skill}`, event.skill)}`} onClick={() => beginEdit(event)}><Pencil size={15} /></button><button type="button" aria-label={`${t('common.delete', 'Delete')} ${t(`skill.${event.skill}`, event.skill)}`} onClick={() => void removeEvent(event)}><Trash2 size={15} /></button></div></td>
                   </tr>)}</tbody>
                 </table>
               </div>
               <div className={styles.mobileEvents}>{filteredEvents.map((event) => <article className={styles.eventCard} key={event.id}>
-                <div className={styles.eventCardTop}><span>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span><span>{t('review.set', 'Set')} {event.setNumber}</span><span className={styles.teamBadge} data-team={event.teamId}>{teamName(event.teamId)}</span></div>
-                <div className={styles.eventCardMain}><strong>{t(`skill.${event.skill}`, event.skill)}</strong><span>{event.originZone ? `Z${event.originZone}` : '—'} · {(event.evaluation ?? 0) > 0 ? '+1' : event.evaluation ?? '—'}</span></div>
+                <div className={styles.eventCardTop}><span>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span><span>{t('review.set', 'Set')} {event.setNumber}{event.rallyNumber !== undefined ? ` · R${event.rallyNumber} #${event.actionIndex ?? '—'}` : ''}</span><span className={styles.teamBadge} data-team={event.teamId}>{teamName(event.teamId)}</span></div>
+                <div className={styles.eventCardMain}><strong>{t(`skill.${event.skill}`, event.skill)}</strong><span>{event.originZone ? `Z${event.originZone}` : '—'} · {event.evaluation === 0 ? t('result.pass', 'Pass') : event.evaluation === 1 ? '+1' : event.evaluation === -1 ? '−1' : '—'}</span></div>
+                {(event.videoTimeMs !== undefined || event.scoreBefore) && <div className={styles.mobileEventMeta}>{event.videoTimeMs !== undefined && <span>▶ {formatVideoTime(event.videoTimeMs)}</span>}{event.scoreBefore && <span>{event.scoreBefore.teamA}–{event.scoreBefore.teamB} → {event.scoreAfter?.teamA ?? event.scoreBefore.teamA}–{event.scoreAfter?.teamB ?? event.scoreBefore.teamB}</span>}</div>}
                 <div className={styles.eventCardBottom}><span>{resolvePlayer(session, event)}</span><div className={styles.rowActions}><button type="button" aria-label={`${t('common.edit', 'Edit')} ${t(`skill.${event.skill}`, event.skill)}`} onClick={() => beginEdit(event)}><Pencil size={15} /></button><button type="button" aria-label={`${t('common.delete', 'Delete')} ${t(`skill.${event.skill}`, event.skill)}`} onClick={() => void removeEvent(event)}><Trash2 size={15} /></button></div></div>
               </article>)}</div>
             </>
@@ -199,7 +205,7 @@ export default function ReviewPage() {
             <label><span>{t('review.skill', 'Skill')}</span><select value={draft.skill} onChange={(event) => setDraft({ ...draft, skill: event.target.value })}>{options.map(([id, key]) => <option key={id} value={id}>{t(key, id)}</option>)}</select></label>
             <label><span>{t('review.zone', 'Zone')}</span><select value={draft.originZone ?? ''} onChange={(event) => setDraft({ ...draft, originZone: event.target.value ? Number(event.target.value) : undefined })}><option value="">—</option>{[1, 2, 3, 4, 5, 6].map((zone) => <option key={zone} value={zone}>Z{zone}</option>)}</select></label>
             <label><span>{t('review.result', 'Evaluation')}</span><select value={draft.evaluation ?? 0} onChange={(event) => setDraft({ ...draft, evaluation: Number(event.target.value) })}><option value="1">+1 · {t('result.positive', 'Positive')}</option><option value="0">0 · {t('result.neutral', 'Neutral')}</option><option value="-1">-1 · {t('result.negative', 'Negative')}</option></select></label>
-            <label><span>{t('review.point_impact', 'Point impact')}</span><select value={draft.pointImpact ?? ''} onChange={(event) => setDraft({ ...draft, pointImpact: (event.target.value || null) as EventDraft['pointImpact'] })}><option value="">{t('review.no_point', 'No point')}</option><option value="TEAM_A">{teamName('A')}</option><option value="TEAM_B">{teamName('B')}</option></select></label>
+            {editing.rallyId ? <label><span>{t('review.point_impact', 'Point impact')}</span><div className={styles.computedImpact}>{draft.evaluation === 0 ? t('review.no_point', 'No point') : teamName((draft.evaluation === 1 ? draft.teamId : draft.teamId === 'A' ? 'B' : 'A') ?? 'A')}</div></label> : <label><span>{t('review.point_impact', 'Point impact')}</span><select value={draft.pointImpact ?? ''} onChange={(event) => setDraft({ ...draft, pointImpact: (event.target.value || null) as EventDraft['pointImpact'] })}><option value="">{t('review.no_point', 'No point')}</option><option value="TEAM_A">{teamName('A')}</option><option value="TEAM_B">{teamName('B')}</option></select></label>}
           </div>
           <footer><button type="button" className={styles.button} onClick={() => { setEditing(null); setDraft(null); }}>{t('common.cancel', 'Cancel')}</button><button type="button" className={styles.primaryButton} disabled={saving} onClick={() => void saveEdit()}>{saving ? t('common.saving', 'Saving…') : <><Check size={16} />{t('common.save', 'Save changes')}</>}</button></footer>
         </section>

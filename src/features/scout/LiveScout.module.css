@@ -1,8 +1,8 @@
 .liveContainer {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  width: 100vw;
+  height: 100dvh;
+  width: 100%;
   background: var(--bg-primary);
   color: var(--text-primary);
   overflow: hidden;
@@ -137,7 +137,7 @@
 /* Main Grid Layout */
 .mainGrid {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0,1fr) 320px;
   flex: 1;
   overflow: hidden;
   position: relative;
@@ -147,11 +147,26 @@
 .matchFocusArea {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  min-width:0;
+  min-height:0;
+  padding:16px;
+  gap:12px;
   background: #090B0E;
-  overflow: hidden;
+  overflow-y:auto;
+  overflow-x:hidden;
 }
+.matchFocusArea>* { flex-shrink:0; }
+.mapToolbar { display:flex; align-items:center; justify-content:space-between; color:var(--text-secondary); font-size:12px; padding:0 2px; }
+.mapToolbar button { background:#172a39; border:1px solid #35536c; color:#9ecfff; font:inherit; padding:6px 10px; border-radius:5px; cursor:pointer; }
+.inspectionNotice { display:flex; flex-wrap:wrap; gap:8px 16px; padding:12px; border:1px solid #35536c; background:#122538; border-radius:8px; font-size:12px; }
+.inspectionNotice strong { color:#93ceff; }
+.quickActions { display:flex; gap:8px; margin-top:12px; }
+.quickActions button { flex:1; display:flex; gap:6px; justify-content:center; align-items:center; padding:8px; color:var(--text-primary); background:#16222c; border:1px solid var(--border); border-radius:5px; font-size:11px; cursor:pointer; }
+.eventSlot { font-family:inherit; color:var(--text-primary); text-align:left; cursor:pointer; }
+.floatingError button { margin-left:10px; padding:6px 10px; border:1px solid white; border-radius:4px; color:white; background:transparent; cursor:pointer; }
 
 .courtFocus {
   display: flex;
@@ -640,7 +655,7 @@
 /* Tablet Landscape (1024px down to 640px) */
 @media (max-width: 1024px) {
   .mainGrid {
-    grid-template-columns: 1fr 280px;
+    grid-template-columns: minmax(0,1fr) 300px;
   }
 }
 
@@ -656,9 +671,11 @@
     font-size: 0.85rem;
   }
 }
+@media(max-width:900px) { .controllerName { display:none; } }
 
 /* Mobile Eyes-Up Dedicated Layout (< 640px) */
 @media (max-width: 640px) {
+  .liveContainer { height:auto; min-height:100dvh; overflow:visible; }
   .topBar {
     padding: 0 12px;
     height: 52px;
@@ -676,12 +693,15 @@
   .mainGrid {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 52px - 36px);
+    height:auto;
+    overflow:visible;
   }
 
   .matchFocusArea {
-    flex: 1;
-    min-height: 220px;
+    flex:initial;
+    min-height:0;
+    padding:12px;
+    overflow:visible;
   }
 
   .courtFocus {
@@ -691,7 +711,7 @@
 
   .sidePanel {
     flex: 0 0 auto;
-    max-height: 48vh;
+    max-height:none;
     border-left: none;
     border-top: 1px solid var(--border);
     padding: 12px;
@@ -724,8 +744,17 @@
   }
 
   .recentSection {
-    max-height: 120px;
+    max-height:none;
   }
+  .recentList { overflow:visible; }
+  .topBar { gap:6px; }
+  .scoreboard { gap:2px; min-width:0; }
+  .teamScore { padding:3px 5px; gap:4px; }
+  .teamName { max-width:65px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+  .setIndicator { padding:2px 5px; }
+  .topActions { gap:5px; }
+  .pauseBtn { padding:5px; }
+  .bottomBar { flex-wrap:wrap; height:auto; min-height:36px; gap:6px; padding:10px 12px; }
 
   .bottomBar {
     height: 36px;

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ControllerState, ControllerProfile } from './ControllerTypes';
-import { BUILT_IN_PROFILES, STANDARD_PROFILE, detectProfile, validateControllerProfile } from './ControllerProfile';
+import { BUILT_IN_PROFILES, WGP12S_PROFILE, LEGACY_BUILT_IN_PROFILE_IDS, detectProfile, validateControllerProfile } from './ControllerProfile';
 import { createInitialButtonMap } from './ButtonStateMachine';
 import { hapticManager } from './HapticManager';
 
@@ -42,7 +42,7 @@ export const useControllerStore = create<ControllerStoreState>((set, get) => ({
     rightStick: { x: 0, y: 0, magnitude: 0, angle: 0 },
     hapticActuator: null
   },
-  profile: STANDARD_PROFILE,
+  profile: WGP12S_PROFILE,
   profileSelectionMode: 'automatic',
   customProfiles: [],
   hapticsEnabled: true,
@@ -90,7 +90,7 @@ export const useControllerStore = create<ControllerStoreState>((set, get) => ({
   useAutoDetectedProfile: () => {
     const { state, customProfiles } = get();
     if (!state.connected || !state.id) {
-      set({ profileSelectionMode: 'automatic' });
+      set({ profileSelectionMode: 'automatic', profile: WGP12S_PROFILE });
       return;
     }
     set({
@@ -123,6 +123,7 @@ export const useControllerStore = create<ControllerStoreState>((set, get) => ({
     if (
       profile.builtIn ||
       BUILT_IN_PROFILES.some((item) => item.id === profile.id) ||
+      LEGACY_BUILT_IN_PROFILE_IDS.includes(profile.id) ||
       !validateControllerProfile(profile).valid ||
       get().customProfiles.some((item) => item.id === profile.id)
     ) {
@@ -142,6 +143,7 @@ export const useControllerStore = create<ControllerStoreState>((set, get) => ({
       if (
         profile.builtIn ||
         BUILT_IN_PROFILES.some((item) => item.id === profile.id) ||
+        LEGACY_BUILT_IN_PROFILE_IDS.includes(profile.id) ||
         seenIds.has(profile.id)
       ) continue;
       accepted.push(profile);

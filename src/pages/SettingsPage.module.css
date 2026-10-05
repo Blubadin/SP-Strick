@@ -45,3 +45,14 @@
   .dialogActions { flex-direction: column-reverse; }
   .dialogActions button { width: 100%; }
 }
+
+.rangeControl { display: flex; align-items: center; gap: 12px; min-width: 200px; }
+.rangeControl input { width: 150px; accent-color: var(--accent); cursor: pointer; }
+.rangeControl output { min-width: 36px; color: var(--text-secondary); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.shortcutGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; padding: 8px 20px; }
+.shortcutRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 50px; border-bottom: 1px solid var(--border-subtle); }
+.shortcutRow > span { display: flex; align-items: center; gap: 10px; }
+.shortcutRow strong { font-size: .8rem; min-width: 30px; }
+.shortcutRow select { width: min(220px, 70%); min-height: 36px; padding: 4px 8px; border: 1px solid var(--border-normal); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--text-primary); font-size: .8rem; }
+.shortcutFooter { padding: 8px 20px 16px; display: flex; justify-content: flex-end; }
+@media (max-width: 600px) { .shortcutGrid { grid-template-columns: 1fr; padding: 6px 15px; } .rangeControl { width: 100%; } .rangeControl input { flex: 1; } }

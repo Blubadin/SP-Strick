@@ -17,18 +17,35 @@ const csvCell = (value: unknown): string => {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 };
 
+export function resultLabel(evaluation: number | undefined): string {
+  if (evaluation === 0) return 'Pass';
+  if (evaluation === 1) return '+1';
+  if (evaluation === -1) return '−1';
+  return '—';
+}
+
+export function formatVideoTime(videoTimeMs: number): string {
+  const totalSeconds = Math.floor(videoTimeMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const tenths = Math.floor((videoTimeMs % 1000) / 100);
+  return `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
+}
+
 export function csvForEvents(events: ScoutingEvent[], session?: Session): string {
   const headers = [
     'timestamp', 'setNumber', 'teamId', 'teamName', 'player', 'playerId', 'skill', 'subSkill',
     'originZone', 'targetZone', 'evaluation', 'pointImpact', 'scoreBeforeA', 'scoreBeforeB',
-    'scoreAfterA', 'scoreAfterB', 'inputSource'
+    'scoreAfterA', 'scoreAfterB', 'inputSource', 'rallyId', 'rallyNumber', 'actionIndex',
+    'resultLabel', 'videoSourceId', 'videoTimeMs'
   ];
   const rows = events.map((event) => [
     new Date(event.timestamp).toISOString(), event.setNumber, event.teamId,
     event.teamId === 'A' ? session?.teamA : session?.teamB,
     resolvePlayer(session, event), event.playerId, event.skill, event.subSkill, event.originZone,
     event.targetZone, event.evaluation, event.pointImpact, event.scoreBefore?.teamA,
-    event.scoreBefore?.teamB, event.scoreAfter?.teamA, event.scoreAfter?.teamB, event.inputSource
+    event.scoreBefore?.teamB, event.scoreAfter?.teamA, event.scoreAfter?.teamB, event.inputSource,
+    event.rallyId, event.rallyNumber, event.actionIndex, resultLabel(event.evaluation), event.videoSourceId, event.videoTimeMs
   ]);
   return `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')}`;
 }

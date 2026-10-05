@@ -31,6 +31,8 @@ export type LiveScoutIntentRoute =
   | 'SCOUT_RESULT_NEGATIVE'
   | 'SCOUT_UNDO'
   | 'SCOUT_BOOKMARK'
+  | 'SCOUT_CLEAR_ACTION'
+  | 'SCOUT_TOGGLE_VIDEO'
   | 'OPEN_RADIAL_SKILL'
   | 'OPEN_RADIAL_ZONE'
   | 'OPEN_RADIAL_RESULT'
@@ -95,6 +97,8 @@ export function routeLiveScoutIntent(
     case 'QUICK_RESULT_NEGATIVE': return 'SCOUT_RESULT_NEGATIVE';
     case 'UNDO_LAST_EVENT': return 'SCOUT_UNDO';
     case 'BOOKMARK_MOMENT': return 'SCOUT_BOOKMARK';
+    case 'CLEAR_CURRENT_ACTION': return 'SCOUT_CLEAR_ACTION';
+    case 'TOGGLE_VIDEO_PLAYBACK': return 'SCOUT_TOGGLE_VIDEO';
     default: return 'IGNORE';
   }
 }

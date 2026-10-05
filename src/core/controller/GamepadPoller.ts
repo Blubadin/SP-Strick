@@ -1,6 +1,6 @@
 import { useControllerStore } from './ControllerStore';
 import { ButtonStateMachine, hasButtonFrameEdges, ALL_SEMANTIC_CONTROLS } from './ButtonStateMachine';
-import { applyDeadzone } from './StickNormalizer';
+import { applyDeadzone, getSelectionStick } from './StickNormalizer';
 import { intentDispatcher, type ControllerIntent } from './ControllerIntent';
 import { hapticManager } from './HapticManager';
 import { rawGamepadSnapshotStore } from './RawGamepadSnapshot';
@@ -17,6 +17,9 @@ let videoModifierActive = false;
 let videoModifierStartedAt = 0;
 let videoModifierChordUsed = false;
 let videoModifierContextEnabled = false;
+let analogSeeking = false;
+let lastAnalogSeekTimestamp = 0;
+let accumulatedAnalogDeltaMs = 0;
 
 const VIDEO_CONTROL_INTENTS: Partial<Record<SemanticControl, ControllerIntent>> = {
   DPAD_LEFT: { type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 },
@@ -24,7 +27,8 @@ const VIDEO_CONTROL_INTENTS: Partial<Record<SemanticControl, ControllerIntent>> 
   FACE_WEST: { type: 'VIDEO_CONTROL_SEEK', deltaMs: -1000 },
   FACE_EAST: { type: 'VIDEO_CONTROL_SEEK', deltaMs: 1000 },
   FACE_SOUTH: { type: 'VIDEO_CONTROL_TOGGLE' },
-  FACE_NORTH: { type: 'VIDEO_CONTROL_CYCLE_RATE' }
+  FACE_NORTH: { type: 'VIDEO_CONTROL_CYCLE_RATE' },
+  MENU: { type: 'TOGGLE_FOCUS_MODE' }
 };
 
 function stickSignificantlyChanged(current: AxisState, previous: AxisState): boolean {
@@ -32,6 +36,12 @@ function stickSignificantlyChanged(current: AxisState, previous: AxisState): boo
 }
 
 function endVideoModifier(): void {
+  if (analogSeeking) {
+    analogSeeking = false;
+    lastAnalogSeekTimestamp = 0;
+    accumulatedAnalogDeltaMs = 0;
+    intentDispatcher.dispatch({ type: 'VIDEO_SEEK_ENDED' });
+  }
   if (!videoModifierActive) return;
   videoModifierActive = false;
   videoModifierStartedAt = 0;
@@ -107,12 +117,51 @@ export function startGamepadPolling(): void {
 
         const consumeAsVideoModifier = videoModifierActive && videoModifierContextEnabled;
         if (videoModifierActive) {
-          if (videoModifierContextEnabled) for (const control of ALL_SEMANTIC_CONTROLS) {
-            if (control === 'VIEW' || !buttons[control].pressedThisFrame) continue;
-            const intent = VIDEO_CONTROL_INTENTS[control];
-            if (intent) {
+          if (videoModifierContextEnabled) {
+            for (const control of ALL_SEMANTIC_CONTROLS) {
+              if (control === 'VIEW' || !buttons[control].pressedThisFrame) continue;
+              const intent = VIDEO_CONTROL_INTENTS[control];
+              if (intent) {
+                videoModifierChordUsed = true;
+                intentDispatcher.dispatch(intent);
+              }
+            }
+
+            const selectionStick = getSelectionStick({ leftStick, rightStick }, profile);
+            const absX = Math.abs(selectionStick.x);
+            if (absX >= 0.25) {
               videoModifierChordUsed = true;
-              intentDispatcher.dispatch(intent);
+              let rateSecPerSec = 1.0;
+              if (absX < 0.50) rateSecPerSec = 1.0;
+              else if (absX < 0.80) rateSecPerSec = 3.5;
+              else rateSecPerSec = 10.0;
+
+              const sign = selectionStick.x < 0 ? -1 : 1;
+              if (!analogSeeking) {
+                analogSeeking = true;
+                lastAnalogSeekTimestamp = timestamp;
+                accumulatedAnalogDeltaMs = 0;
+                intentDispatcher.dispatch({ type: 'VIDEO_SEEK_STARTED' });
+              } else {
+                const elapsed = timestamp - lastAnalogSeekTimestamp;
+                if (elapsed >= 90) {
+                  lastAnalogSeekTimestamp = timestamp;
+                  const deltaMs = Math.round(sign * rateSecPerSec * elapsed);
+                  accumulatedAnalogDeltaMs += deltaMs;
+                  intentDispatcher.dispatch({
+                    type: 'VIDEO_ANALOG_SEEK',
+                    deltaMs,
+                    speedMultiplier: rateSecPerSec,
+                    direction: sign < 0 ? 'backward' : 'forward',
+                    accumulatedDeltaMs: accumulatedAnalogDeltaMs
+                  });
+                }
+              }
+            } else if (analogSeeking) {
+              analogSeeking = false;
+              lastAnalogSeekTimestamp = 0;
+              accumulatedAnalogDeltaMs = 0;
+              intentDispatcher.dispatch({ type: 'VIDEO_SEEK_ENDED' });
             }
           }
           if (viewButton.releasedThisFrame) {

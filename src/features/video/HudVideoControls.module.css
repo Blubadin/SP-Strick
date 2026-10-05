@@ -17,13 +17,17 @@
 .speedLabel { display:flex; align-items:center; justify-content:flex-end; gap:6px; color:rgb(231 239 248 / 55%); font-size:.68rem; white-space:nowrap; }
 .speedLabel select { min-width:53px; height:28px; color:#e6edf5; background:#151d26; }
 .speedLabel option { background:#151d26; color:#e6edf5; }
+.endGroup { display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+.focusBtn { min-width:48px; height:30px; padding:0 8px; border:1px solid rgb(255 255 255 / 15%); border-radius:6px; background:rgb(255 255 255 / 8%); color:rgb(231 239 248 / 86%); font:700 0.68rem/1 inherit; letter-spacing:0.05em; cursor:pointer; transition:all 0.12s ease; }
+.focusBtn:hover { border-color:var(--accent, #2997ff); background:rgba(41, 151, 255, 0.15); color:#ffffff; }
+.focusActive { border-color:#5bb3ff !important; background:var(--accent, #2997ff) !important; color:#ffffff !important; box-shadow:0 0 10px rgba(41, 151, 255, 0.4); }
 .error { color:#ff9b95; font-size:.7rem; }
 @media (max-width:700px) {
   .controls { padding:8px; }
   .controlRow { grid-template-columns:1fr auto; gap:7px; }
   .time { grid-column:1; grid-row:1; }
   .transport { grid-column:1/-1; grid-row:2; }
-  .speedLabel { grid-column:2; grid-row:1; }
+  .endGroup { grid-column:2; grid-row:1; }
   .transport button { min-width:40px; height:36px; }
   .transport .playButton { width:40px; height:36px; }
 }

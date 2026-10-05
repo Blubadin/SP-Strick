@@ -1,4 +1,4 @@
-import type { AxisState } from './ControllerTypes';
+import type { AxisState, ControllerProfile, ControllerState } from './ControllerTypes';
 
 /**
  * Normalizes raw analog stick input with configurable deadzone, inversion, and drift protection.
@@ -41,4 +41,18 @@ export function applyDeadzone(
     magnitude: normalizedMag,
     angle
   };
+}
+
+/**
+ * Resolves the primary selection stick according to controller capabilities.
+ * Right Stick is preferred when available in the active profile; otherwise Left Stick.
+ */
+export function getSelectionStick(
+  state: Pick<ControllerState, 'leftStick' | 'rightStick'>,
+  profile?: Pick<ControllerProfile, 'rightStick'> | null
+): AxisState {
+  if (profile?.rightStick) {
+    return state.rightStick;
+  }
+  return state.leftStick;
 }

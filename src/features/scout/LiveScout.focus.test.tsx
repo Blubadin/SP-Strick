@@ -183,4 +183,19 @@ describe('LiveScout focus mode', () => {
     act(() => { vi.advanceTimersByTime(3100); });
     expect(liveSurface.getAttribute('data-hud-hidden')).toBe('true');
   });
+
+  it('toggles focus mode on and off via TOGGLE_FOCUS_MODE intent from controller', () => {
+    useControllerStore.setState((state) => ({ state: { ...state.state, connected: true } }));
+    renderLiveScout();
+    const liveSurface = screen.getByTestId('live-scout-surface');
+    expect(liveSurface.getAttribute('data-focus-mode')).toBe('false');
+
+    // Toggle ON
+    act(() => intentDispatcher.dispatch({ type: 'TOGGLE_FOCUS_MODE' }));
+    expect(liveSurface.getAttribute('data-focus-mode')).toBe('true');
+
+    // Toggle OFF
+    act(() => intentDispatcher.dispatch({ type: 'TOGGLE_FOCUS_MODE' }));
+    expect(liveSurface.getAttribute('data-focus-mode')).toBe('false');
+  });
 });

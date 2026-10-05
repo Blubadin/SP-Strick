@@ -150,6 +150,62 @@ describe('GamepadPoller state publication', () => {
     expect(intents).not.toContain('UNDO_LAST_EVENT');
     expect(intents).not.toContain('QUICK_RESULT_NEUTRAL');
   });
+
+  it('toggles focus mode via VIEW + MENU chord without triggering playback toggle on release', () => {
+    cleanupDetector = listenForGamepadConnections();
+    setVideoModifierContextEnabled(true);
+    const received: Array<{ type: string }> = [];
+    const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
+    startGamepadPolling();
+    stepFrame(0);
+    // Hold VIEW
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    // Press MENU
+    (gamepad.buttons as GamepadButton[])[9] = { pressed: true, touched: true, value: 1 };
+    stepFrame(30);
+    expect(received).toContainEqual({ type: 'TOGGLE_FOCUS_MODE' });
+
+    // Release VIEW
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
+    (gamepad.buttons as GamepadButton[])[9] = { pressed: false, touched: false, value: 0 };
+    stepFrame(60);
+    stopListening();
+
+    // VIEW release should NOT toggle playback because chord was used
+    expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(0);
+  });
+
+  it('performs analog scrub with RS X while VIEW is held and emits seek start, delta, and seek end', () => {
+    cleanupDetector = listenForGamepadConnections();
+    setVideoModifierContextEnabled(true);
+    const received: Array<{ type: string; deltaMs?: number }> = [];
+    const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
+    startGamepadPolling();
+    stepFrame(0);
+    // Hold VIEW
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+
+    // Deflect Right Stick X past deadzone (e.g. 0.8 => medium/fast speed)
+    (gamepad.axes as number[])[2] = 0.8;
+    stepFrame(20);
+    expect(received).toContainEqual({ type: 'VIDEO_SEEK_STARTED' });
+
+    // Step frame past throttle interval (90ms)
+    stepFrame(120);
+    const analogSeeks = received.filter(i => i.type === 'VIDEO_ANALOG_SEEK');
+    expect(analogSeeks.length).toBeGreaterThan(0);
+    expect((analogSeeks[0] as { deltaMs: number }).deltaMs).toBeGreaterThan(0);
+
+    // Return RS to neutral
+    (gamepad.axes as number[])[2] = 0.0;
+    stepFrame(130);
+    expect(received).toContainEqual({ type: 'VIDEO_SEEK_ENDED' });
+
+    stopListening();
+  });
+
   it('consumes unsupported controls while VIEW modifier is active', () => {
     cleanupDetector = listenForGamepadConnections();
     setVideoModifierContextEnabled(true);

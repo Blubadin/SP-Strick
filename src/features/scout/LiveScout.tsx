@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useControllerStore } from '../../core/controller/ControllerStore';
 import { setVideoModifierContextEnabled } from '../../core/controller/GamepadPoller';
 import { useScoutStore, setVideoTimingProvider } from '../../core/scouting/ScoutStore';
+import type { ScoutingEvent } from '../../core/scouting/ScoutingEvent';
 import { intentDispatcher, type ControllerIntent, type RadialCategory } from '../../core/controller/ControllerIntent';
 import { getHysteresisSector } from '../../core/controller/RadialSelector';
 import { RadialMenu, type RadialOptionItem } from '../radial/RadialMenu';
@@ -22,9 +23,10 @@ import { VOLLEYBALL_SKILLS } from '../../core/sports/volleyball/volleyball.skill
 import { VOLLEYBALL_ZONES } from '../../core/sports/volleyball/volleyball.zones';
 import { VOLLEYBALL_RESULTS } from '../../core/sports/volleyball/volleyball.rules';
 import { ControllerGlyph } from '../../components/ControllerGlyph';
-import { hapticManager } from '../../core/controller/HapticManager';
-import type { ScoutingEvent } from '../../core/scouting/ScoutingEvent';
-import { canCommitRadialSelection, getContextAfterDisconnect, nextVideoPlaybackRate, routeLiveScoutIntent, type LiveScoutInteractionContext } from './LiveScoutInput';
+import { getContextAfterDisconnect, nextVideoPlaybackRate, routeLiveScoutIntent, type LiveScoutInteractionContext } from './LiveScoutInput';
+import { getSelectionStick } from '../../core/controller/StickNormalizer';
+import { TransientSelectorEngine } from './transientSelector';
+import { ControllerHudFeedback, type ControllerBadge, type SeekHudState } from './ControllerHudFeedback';
 import styles from './LiveScout.module.css';
 
 type ActiveWheelType = 'SKILL' | 'ZONE' | 'RESULT' | 'TEAM_PLAYER';
@@ -89,8 +91,58 @@ export function LiveScout() {
   const focusHudTimerRef = useRef<number | null>(null);
   const revealFocusHudRef = useRef<() => void>(() => {});
 
+  const [controllerBadge, setControllerBadge] = useState<ControllerBadge | null>(null);
+  const badgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [seekState, setSeekState] = useState<SeekHudState | null>(null);
+  const seekClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showBadge = useCallback((badge: ControllerBadge) => {
+    if (badgeTimerRef.current !== null) clearTimeout(badgeTimerRef.current);
+    setControllerBadge(badge);
+    badgeTimerRef.current = setTimeout(() => {
+      setControllerBadge(null);
+      badgeTimerRef.current = null;
+    }, 850);
+  }, []);
+
+  const scheduleSeekClear = useCallback(() => {
+    if (seekClearTimerRef.current !== null) clearTimeout(seekClearTimerRef.current);
+    seekClearTimerRef.current = setTimeout(() => {
+      setSeekState(null);
+      seekClearTimerRef.current = null;
+    }, 600);
+  }, []);
+
+  const clearSeekTimer = useCallback(() => {
+    if (seekClearTimerRef.current !== null) clearTimeout(seekClearTimerRef.current);
+    seekClearTimerRef.current = null;
+  }, []);
+
+  const clearFocusHudTimer = useCallback(() => {
+    if (focusHudTimerRef.current !== null) window.clearTimeout(focusHudTimerRef.current);
+    focusHudTimerRef.current = null;
+  }, []);
+
+  const toggleFocusMode = useCallback(() => {
+    setFocusMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        clearFocusHudTimer();
+        setHudHidden(false);
+      } else {
+        setHudHidden(false);
+      }
+      showBadge({
+        title: 'FOCUS',
+        value: next ? t('scout.focus_on', 'HUD FOCUS ON') : t('scout.focus_off', 'HUD FOCUS OFF')
+      });
+      return next;
+    });
+  }, [clearFocusHudTimer, showBadge, t]);
+
   const activeSectorRef = useRef<number | null>(null);
   const activeWheelRef = useRef<ActiveWheelType | null>(null);
+  const selectorEngineRef = useRef<TransientSelectorEngine<RadialOptionItem> | null>(null);
   const pauseMenuOpenRef = useRef(false);
   const quickEditOpenRef = useRef(false);
   const contextRef = useRef<LiveScoutInteractionContext>(ctrlState.connected ? 'LIVE_SCOUT' : 'DISCONNECTED');
@@ -114,14 +166,21 @@ export function LiveScout() {
     setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT' || contextRef.current === 'VIDEO_CONTROL');
   }, []);
 
-  const setWheelOpen = useCallback((category: ActiveWheelType | null, control?:SemanticControl) => {
+  const setWheelOpen = useCallback((category: ActiveWheelType | null, control?: SemanticControl) => {
     openingControlRef.current = control ?? null;
     activeWheelRef.current = category;
     activeSectorRef.current = null;
     setActiveWheel(category);
     setSelectedSectorIdx(null);
     syncInteractionContext();
-  }, [syncInteractionContext]);
+    if (category) {
+      selectorEngineRef.current?.open(category, category === 'ZONE');
+      const catLabel = category === 'ZONE' ? t('scout.zone', 'Zone') : category === 'SKILL' ? t('scout.skill', 'Skill') : category === 'RESULT' ? t('scout.result', 'Result') : t('scout.team_player', 'Team / Player');
+      showBadge({ title: catLabel });
+    } else {
+      selectorEngineRef.current?.cancel();
+    }
+  }, [syncInteractionContext, showBadge, t]);
 
   const setPauseMenuOpen = useCallback((open: boolean) => {
     pauseMenuOpenRef.current = open;
@@ -256,7 +315,6 @@ export function LiveScout() {
   }, [cancelQuickEdit, saveQuickEdit, setWheelOpen]);
 
   const intentHandlerRef = useRef<(intent: ControllerIntent) => void>(() => undefined);
-  const releaseHandlerRef = useRef<(category:ActiveWheelType) => void>(() => undefined);
 
   // 1. Screen Wake Lock implementation follows page visibility and lifecycle.
   useEffect(() => {
@@ -329,10 +387,6 @@ export function LiveScout() {
     setVideoSourceId(videoPlayback.getEventTiming().videoSourceId);
   }), []);
 
-  const clearFocusHudTimer = useCallback(() => {
-    if (focusHudTimerRef.current !== null) window.clearTimeout(focusHudTimerRef.current);
-    focusHudTimerRef.current = null;
-  }, []);
   const scheduleFocusHudHide = useCallback(() => {
     clearFocusHudTimer();
     if (!focusMode || !videoPlaying) return;
@@ -453,43 +507,76 @@ export function LiveScout() {
     return '';
   }, [activeWheel, t]);
 
-  const chooseOption = useCallback((wheelType:ActiveWheelType,item:RadialOptionItem) => {
+  const chooseOption = useCallback((wheelType: ActiveWheelType, item: RadialOptionItem) => {
     if (quickEditOpenRef.current) {
-      if (wheelType === 'SKILL') stageQuickEdit({ skill:item.id });
-      else if (wheelType === 'ZONE') stageQuickEdit({ originZone:Number(item.id) });
-      else if (wheelType === 'RESULT') stageQuickEdit({ evaluation:Number(item.id) });
-      else if (item.id === 'TEAM_A' || item.id === 'TEAM_B') stageQuickEdit({teamId:item.id.slice(-1),playerId:undefined});
-      else if (item.id.startsWith('PLAYER_')) stageQuickEdit({playerId:item.id.slice(7)});
+      if (wheelType === 'SKILL') stageQuickEdit({ skill: item.id });
+      else if (wheelType === 'ZONE') stageQuickEdit({ originZone: Number(item.id) });
+      else if (wheelType === 'RESULT') stageQuickEdit({ evaluation: Number(item.id) });
+      else if (item.id === 'TEAM_A' || item.id === 'TEAM_B') stageQuickEdit({ teamId: item.id.slice(-1), playerId: undefined });
+      else if (item.id.startsWith('PLAYER_')) stageQuickEdit({ playerId: item.id.slice(7) });
     } else {
       setInspectedEvent(null);
-      if (wheelType === 'SKILL') void scout.updateCurrentEvent({skill:item.id});
-      else if (wheelType === 'ZONE') void scout.updateCurrentEvent({originZone:Number(item.id)});
-      else if (wheelType === 'RESULT') void scout.updateCurrentEvent({evaluation:Number(item.id)});
-      else if (item.id === 'TEAM_A' || item.id === 'TEAM_B') scout.setActiveTeam(item.id.slice(-1) as 'A'|'B');
+      if (wheelType === 'SKILL') void scout.updateCurrentEvent({ skill: item.id });
+      else if (wheelType === 'ZONE') void scout.updateCurrentEvent({ originZone: Number(item.id) });
+      else if (wheelType === 'RESULT') void scout.updateCurrentEvent({ evaluation: Number(item.id) });
+      else if (item.id === 'TEAM_A' || item.id === 'TEAM_B') scout.setActiveTeam(item.id.slice(-1) as 'A' | 'B');
       else if (item.id.startsWith('PLAYER_')) scout.setSelectedPlayer(item.id.slice(7));
     }
-    setWheelOpen(null);
-  }, [scout,setWheelOpen,stageQuickEdit]);
+    selectorEngineRef.current?.destroy();
+    activeWheelRef.current = null;
+    activeSectorRef.current = null;
+    setActiveWheel(null);
+    setSelectedSectorIdx(null);
+    syncInteractionContext();
+  }, [scout, stageQuickEdit, syncInteractionContext]);
 
-  // Sample the release frame directly so centering always cancels, even before React paints it.
-  const handleWheelRelease = useCallback(
-    (wheelType: ActiveWheelType) => {
-      const controllerConnected = useControllerStore.getState().state.connected;
-      if (!activeWheelRef.current || !canCommitRadialSelection(contextRef.current, controllerConnected)) return;
+  const wheelOptionsRef = useRef<RadialOptionItem[]>([]);
+  const wheelLabelRef = useRef('');
+  const chooseOptionRef = useRef(chooseOption);
+  const showBadgeRef = useRef(showBadge);
+  const syncInteractionContextRef = useRef(syncInteractionContext);
 
-      const stick = useControllerStore.getState().state.leftStick;
-      const zone = wheelType === 'ZONE' ? getGridZone(stick.x,stick.y) : null;
-      const sectorIdx = wheelType === 'ZONE'
-        ? zone === null ? null : wheelOptions.findIndex(option => option.id === String(zone))
-        : getHysteresisSector(stick.angle,stick.magnitude,wheelOptions.length,activeSectorRef.current);
-      if (sectorIdx !== null && wheelOptions[sectorIdx]) {
-        const item = wheelOptions[sectorIdx];
-        chooseOption(wheelType,item);
+  useEffect(() => {
+    wheelOptionsRef.current = wheelOptions;
+    wheelLabelRef.current = wheelLabel;
+    chooseOptionRef.current = chooseOption;
+    showBadgeRef.current = showBadge;
+    syncInteractionContextRef.current = syncInteractionContext;
+  });
+
+  useEffect(() => {
+    const engine = new TransientSelectorEngine<RadialOptionItem>({
+      onCommit: (item) => {
+        const cat = activeWheelRef.current;
+        if (cat) {
+          chooseOptionRef.current(cat, item);
+          showBadgeRef.current({ title: wheelLabelRef.current, value: item.label, isSuccess: true });
+        }
+      },
+      onCancel: () => {
+        activeWheelRef.current = null;
+        activeSectorRef.current = null;
+        setActiveWheel(null);
+        setSelectedSectorIdx(null);
+        syncInteractionContextRef.current();
+      },
+      onHighlight: (item) => {
+        if (!item) {
+          activeSectorRef.current = null;
+          setSelectedSectorIdx(null);
+        } else {
+          const idx = wheelOptionsRef.current.findIndex((o) => o.id === item.id);
+          activeSectorRef.current = idx >= 0 ? idx : null;
+          setSelectedSectorIdx(idx >= 0 ? idx : null);
+        }
       }
-      setWheelOpen(null);
-    },
-    [wheelOptions, chooseOption, setWheelOpen]
-  );
+    });
+    selectorEngineRef.current = engine;
+    return () => {
+      engine.destroy();
+      selectorEngineRef.current = null;
+    };
+  }, []);
 
   const handleIntent = useCallback((intent: ControllerIntent) => {
     revealFocusHud();
@@ -507,10 +594,10 @@ export function LiveScout() {
       case 'PAUSE_BACK': setPauseMenuOpen(false); break;
       case 'QUICK_EDIT_NAVIGATE_UP': moveNavigationFocus(-1); break;
       case 'QUICK_EDIT_NAVIGATE_DOWN': moveNavigationFocus(1); break;
-      case 'QUICK_EDIT_OPEN_RADIAL_SKILL': activateQuickEditRadial('SKILL',intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
-      case 'QUICK_EDIT_OPEN_RADIAL_ZONE': activateQuickEditRadial('ZONE',intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
-      case 'QUICK_EDIT_OPEN_RADIAL_RESULT': activateQuickEditRadial('RESULT',intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
-      case 'QUICK_EDIT_OPEN_RADIAL_TEAM_PLAYER': activateQuickEditRadial('TEAM_PLAYER',intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
+      case 'QUICK_EDIT_OPEN_RADIAL_SKILL': activateQuickEditRadial('SKILL', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
+      case 'QUICK_EDIT_OPEN_RADIAL_ZONE': activateQuickEditRadial('ZONE', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
+      case 'QUICK_EDIT_OPEN_RADIAL_RESULT': activateQuickEditRadial('RESULT', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
+      case 'QUICK_EDIT_OPEN_RADIAL_TEAM_PLAYER': activateQuickEditRadial('TEAM_PLAYER', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
       case 'SCOUT_SELECT_TEAM_A': scout.setActiveTeam('A'); break;
       case 'SCOUT_SELECT_TEAM_B': scout.setActiveTeam('B'); break;
       case 'SCOUT_RESULT_POSITIVE': void scout.updateCurrentEvent({ evaluation: 1 }); break;
@@ -520,15 +607,30 @@ export function LiveScout() {
       case 'SCOUT_BOOKMARK': void scout.addBookmark(); break;
       case 'SCOUT_CLEAR_ACTION': void useScoutStore.getState().clearCurrentEvent(); setInspectedEvent(null); break;
       case 'SCOUT_TOGGLE_VIDEO': videoPlayback.togglePlayback(); break;
+      case 'TOGGLE_FOCUS_MODE': toggleFocusMode(); break;
       case 'ENTER_VIDEO_CONTROL': contextRef.current = 'VIDEO_CONTROL'; setVideoModifierContextEnabled(true); break;
       case 'EXIT_VIDEO_CONTROL':
         if (contextRef.current === 'VIDEO_CONTROL') contextRef.current = 'LIVE_SCOUT';
         setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT');
         break;
       case 'VIDEO_CONTROL_COMMAND':
-        if (intent.type === 'VIDEO_CONTROL_SEEK') void videoPlayback.seekBy(intent.deltaMs).catch(() => undefined);
-        else if (intent.type === 'VIDEO_CONTROL_TOGGLE') videoPlayback.togglePlayback();
-        else if (intent.type === 'VIDEO_CONTROL_CYCLE_RATE') {
+        if (intent.type === 'VIDEO_CONTROL_SEEK') {
+          void videoPlayback.seekBy(intent.deltaMs).catch(() => undefined);
+        } else if (intent.type === 'VIDEO_ANALOG_SEEK') {
+          void videoPlayback.seekBy(intent.deltaMs).catch(() => undefined);
+          setSeekState({
+            direction: intent.direction,
+            deltaMs: intent.accumulatedDeltaMs,
+            speedMultiplier: intent.speedMultiplier,
+            currentTimeMs: videoPlayback.getCurrentTimeMs() + intent.deltaMs
+          });
+        } else if (intent.type === 'VIDEO_SEEK_STARTED') {
+          clearSeekTimer();
+        } else if (intent.type === 'VIDEO_SEEK_ENDED') {
+          scheduleSeekClear();
+        } else if (intent.type === 'VIDEO_CONTROL_TOGGLE') {
+          videoPlayback.togglePlayback();
+        } else if (intent.type === 'VIDEO_CONTROL_CYCLE_RATE') {
           videoPlayback.setPlaybackRate(nextVideoPlaybackRate(videoPlayback.getPlaybackRate()));
         }
         break;
@@ -540,7 +642,12 @@ export function LiveScout() {
         const category: ActiveWheelType = route === 'OPEN_RADIAL_SKILL' ? 'SKILL'
           : route === 'OPEN_RADIAL_ZONE' ? 'ZONE'
             : route === 'OPEN_RADIAL_RESULT' ? 'RESULT' : 'TEAM_PLAYER';
-        setWheelOpen(category,intent.type === 'OPEN_RADIAL' ? intent.control : undefined);
+        if (activeWheelRef.current === category) {
+          selectorEngineRef.current?.cancel();
+          setWheelOpen(null);
+        } else {
+          setWheelOpen(category, intent.type === 'OPEN_RADIAL' ? intent.control : undefined);
+        }
         break;
       }
       case 'IGNORE': break;
@@ -549,19 +656,21 @@ export function LiveScout() {
     activatePauseMenuItem,
     activateQuickEditRadial,
     cancelQuickEdit,
+    clearSeekTimer,
     moveNavigationFocus,
     scout,
     exitFocusMode,
     revealFocusHud,
+    scheduleSeekClear,
     setPauseMenuOpen,
     setQuickEditOpen,
-    setWheelOpen
+    setWheelOpen,
+    toggleFocusMode
   ]);
   useLayoutEffect(() => {
     intentHandlerRef.current = handleIntent;
-    releaseHandlerRef.current = handleWheelRelease;
     revealFocusHudRef.current = revealFocusHud;
-  }, [handleIntent,handleWheelRelease,revealFocusHud]);
+  }, [handleIntent, revealFocusHud]);
 
   // Subscribe once; refs keep this dispatcher and disconnect listener stable across renders.
   useEffect(() => {
@@ -579,6 +688,7 @@ export function LiveScout() {
         revealFocusHudRef.current();
       }
       if (!connected) {
+        selectorEngineRef.current?.destroy();
         activeWheelRef.current = null;
         activeSectorRef.current = null;
         setActiveWheel(null);
@@ -586,15 +696,34 @@ export function LiveScout() {
         contextRef.current = getContextAfterDisconnect(contextRef.current);
         setVideoModifierContextEnabled(false);
       } else if (!wasConnected) {
+        selectorEngineRef.current?.destroy();
         activeWheelRef.current = null;
         activeSectorRef.current = null;
         setActiveWheel(null);
         setSelectedSectorIdx(null);
         syncInteractionContext();
       }
-      const control = openingControlRef.current;
-      if (connected && control && activeWheelRef.current && store.state.buttons[control].releasedThisFrame) {
-        releaseHandlerRef.current(activeWheelRef.current);
+
+      if (connected && activeWheelRef.current && selectorEngineRef.current?.isOpen()) {
+        const stick = getSelectionStick(store.state, store.profile);
+        const currentCat = activeWheelRef.current;
+        selectorEngineRef.current.updateStick(stick, (s) => {
+          if (currentCat === 'ZONE') {
+            const zoneNum = getGridZone(s.x, s.y);
+            if (zoneNum === null) return null;
+            return wheelOptionsRef.current.find((o) => o.id === String(zoneNum)) ?? null;
+          }
+          const count = wheelOptionsRef.current.length;
+          const sectorIdx = getHysteresisSector(
+            s.angle,
+            s.magnitude,
+            count,
+            activeSectorRef.current,
+            { activationThreshold: 0.50, deactivationThreshold: 0.20, hysteresisDegrees: 6 }
+          );
+          if (sectorIdx === null || !wheelOptionsRef.current[sectorIdx]) return null;
+          return wheelOptionsRef.current[sectorIdx];
+        });
       }
     });
     return () => {
@@ -603,27 +732,6 @@ export function LiveScout() {
       setVideoModifierContextEnabled(false);
     };
   }, [syncInteractionContext]);
-
-  // 6. Angular Hysteresis Stick Selection while Radial is Open
-  useEffect(() => {
-    if (!activeWheel || wheelOptions.length === 0 || !ctrlState.connected) return;
-
-    const zone = activeWheel === 'ZONE' ? getGridZone(ctrlState.leftStick.x,ctrlState.leftStick.y) : null;
-    const newSector = activeWheel === 'ZONE' ? (zone === null ? null : wheelOptions.findIndex(option => option.id === String(zone))) : getHysteresisSector(
-      ctrlState.leftStick.angle,
-      ctrlState.leftStick.magnitude,
-      wheelOptions.length,
-      activeSectorRef.current
-    );
-
-    if (newSector !== activeSectorRef.current) {
-      if (newSector !== null) {
-        hapticManager.tick(null);
-      }
-      activeSectorRef.current = newSector;
-      setSelectedSectorIdx(newSector);
-    }
-  }, [ctrlState.leftStick.angle, ctrlState.leftStick.magnitude, ctrlState.leftStick.x,ctrlState.leftStick.y, ctrlState.connected, activeWheel, wheelOptions]);
 
   const activeOptionId =
     selectedSectorIdx !== null && wheelOptions[selectedSectorIdx]
@@ -698,8 +806,14 @@ export function LiveScout() {
 
         {/* Controller Status Indicator */}
         <div className={styles.topActions}>
-          <button className={styles.pauseBtn} onClick={() => { setFocusMode(true); setHudHidden(false); }} title={t('scout.focus_mode','Focus mode')}>
-            {t('scout.focus_mode','Focus mode')}
+          <button
+            className={`${styles.pauseBtn} ${focusMode ? styles.focusActive : ''}`}
+            onClick={toggleFocusMode}
+            aria-pressed={focusMode}
+            aria-label={t('scout.focus_mode', 'Focus mode')}
+            title={t('scout.focus_mode', 'Focus mode')}
+          >
+            {t('scout.focus_mode', 'Focus mode')}
           </button>
           <button
             className={styles.pauseBtn}
@@ -734,7 +848,16 @@ export function LiveScout() {
             <button className={styles.focusExit} type="button" onClick={exitFocusMode}>{t('scout.exit_focus','Exit focus mode')}</button>
             {!videoSourceId && <div className={styles.focusEmpty}>{t('video.focus_empty','Add a video or continue scouting without one.')}</div>}
           </>}
-          <div className={styles.focusVideoPanel}>{scout.sessionId && <ScoutVideoPanel sessionId={scout.sessionId} focusMode={focusMode} focusHudHidden={focusMode && hudHidden} />}</div>
+          <div className={styles.focusVideoPanel}>
+            {scout.sessionId && (
+              <ScoutVideoPanel
+                sessionId={scout.sessionId}
+                focusMode={focusMode}
+                focusHudHidden={focusMode && hudHidden}
+                onToggleFocus={toggleFocusMode}
+              />
+            )}
+          </div>
           {!focusMode && <>
           <div className={styles.mapToolbar}>
             <span>{mapEvents[0]?.rallyNumber ? t('scout.rally_number','Rally {{number}}',{number:mapEvents[0].rallyNumber}) : t('scout.live','Live court')}</span>
@@ -749,6 +872,9 @@ export function LiveScout() {
             {inspected.videoTimeMs !== undefined && <span>{t('video.title','Match video')} · {formatVideoTime(inspected.videoTimeMs)}</span>}
           </div>}
           </>}
+
+          {/* Controller HUD Feedback */}
+          <ControllerHudFeedback badge={controllerBadge} seekState={seekState} />
 
           {/* Radial Overlay */}
           {activeWheel && !isQuickEditOpen && renderSelection()}

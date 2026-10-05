@@ -28,7 +28,17 @@ export function AudioUnlockButton() {
 
 type PickerWindow = Window & { showOpenFilePicker?: (options: { multiple: boolean; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<LocalVideoHandle[]> };
 
-export function ScoutVideoPanel({ sessionId, focusMode = false, focusHudHidden = false }: { sessionId: string; focusMode?: boolean; focusHudHidden?: boolean }) {
+export function ScoutVideoPanel({
+  sessionId,
+  focusMode = false,
+  focusHudHidden = false,
+  onToggleFocus
+}: {
+  sessionId: string;
+  focusMode?: boolean;
+  focusHudHidden?: boolean;
+  onToggleFocus?: () => void;
+}) {
   const { t } = useTranslation();
   const fieldId = useId();
   const [sources, setSources] = useState<VideoSource[]>([]);
@@ -207,7 +217,7 @@ export function ScoutVideoPanel({ sessionId, focusMode = false, focusHudHidden =
     </div>}
     <input ref={fileInput} type="file" accept="video/*" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void acceptFile(file); event.target.value = ''; }} />
     <div ref={host} data-video-host className={selected ? styles.player : undefined} />
-    {selected && <HudVideoControls focusHudHidden={focusHudHidden} />}
+    {selected && <HudVideoControls focusHudHidden={focusHudHidden} focusMode={focusMode} onToggleFocus={onToggleFocus} />}
     {!selected && <div className={styles.empty}>{t('video.empty', { defaultValue: 'Add a video to capture match times with your events.' })}</div>}
     {loading && <p role="status" className={styles.message}>{t('video.loading', { defaultValue: 'Loading video…' })}</p>}
     {error && <div className={styles.error}>

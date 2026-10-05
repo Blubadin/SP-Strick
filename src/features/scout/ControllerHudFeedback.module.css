@@ -1,0 +1,97 @@
+.container {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1200;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(13, 20, 28, 0.88);
+  border: 1px solid rgba(89, 155, 214, 0.4);
+  color: #e5f1fa;
+  font-family: inherit;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  animation: badgeIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(8px);
+}
+
+@keyframes badgeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.badgeTitle {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #79b7ed;
+}
+
+.badgeValue {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.badgeCheck {
+  font-size: 13px;
+  font-weight: 800;
+  color: #52e399;
+}
+
+/* Seek HUD Overlay - center of video or top right */
+.seekOverlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(10, 15, 22, 0.92);
+  border: 1.5px solid rgba(41, 151, 255, 0.6);
+  color: #ffffff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(41, 151, 255, 0.25);
+  animation: badgeIn 0.1s ease-out;
+  backdrop-filter: blur(10px);
+}
+
+.seekHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #64b5f6;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.seekDelta {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0;
+}
+
+.seekTime {
+  font-size: 11px;
+  color: #a0bed6;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}

@@ -22,7 +22,17 @@ export type ControllerIntent =
   | { type: 'VIDEO_CONTROL_EXIT' }
   | { type: 'VIDEO_CONTROL_SEEK'; deltaMs: number }
   | { type: 'VIDEO_CONTROL_TOGGLE' }
-  | { type: 'VIDEO_CONTROL_CYCLE_RATE' };
+  | { type: 'VIDEO_CONTROL_CYCLE_RATE' }
+  | { type: 'TOGGLE_FOCUS_MODE' }
+  | {
+      type: 'VIDEO_ANALOG_SEEK';
+      deltaMs: number;
+      speedMultiplier: number;
+      direction: 'backward' | 'forward';
+      accumulatedDeltaMs: number;
+    }
+  | { type: 'VIDEO_SEEK_STARTED' }
+  | { type: 'VIDEO_SEEK_ENDED' };
 
 export type IntentListener = (intent: ControllerIntent) => void;
 

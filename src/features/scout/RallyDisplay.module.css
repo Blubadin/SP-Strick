@@ -39,14 +39,18 @@
 .actionDetail>span:not(.actionTop) { color:var(--text-secondary); font-size:10px; }
 .actionMetadata { margin-top:2px; font-variant-numeric:tabular-nums; }
 .loadMore { padding:12px; border:1px solid var(--border); background:var(--surface); color:var(--text-primary); border-radius:6px; cursor:pointer; }
-.gridOverlay { position:absolute; inset:0; z-index:1000; display:grid; place-items:center; padding:16px; background:#060b13bb; }
-.gridMenu { width:min(100%,580px); padding:20px; background:#111b24; border:1px solid #496171; border-radius:14px; box-shadow:0 20px 70px #000a; }
-.gridMenuHeading { margin-bottom:18px; font-size:18px; }
-.gridMenuHeading>button { border:1px solid var(--border); background:var(--surface); color:var(--text-primary); width:32px; height:32px; border-radius:6px; cursor:pointer; }
+.courtMapWrapper { width:100%; max-width:260px; margin:0 auto; }
+.gridOverlay, .areaOverlay { position:absolute; inset:0; z-index:1000; display:flex; align-items:flex-end; justify-content:flex-end; padding:clamp(12px, 2.5vw, 24px); background:rgba(6, 11, 19, 0.18); pointer-events:none; animation:areaFadeIn 0.12s ease-out; }
+@keyframes areaFadeIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+.gridMenu, .areaCard { pointer-events:auto; width:min(100%, 300px); padding:12px; background:#101922; border:1px solid #3c556b; border-radius:12px; box-shadow:0 16px 48px rgba(0, 0, 0, 0.6); }
+.gridMenuHeading, .areaHeading { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:13px; color:#cbe1f0; }
+.gridMenuHeading>button, .areaHeading>button { border:1px solid var(--border); background:var(--surface); color:var(--text-primary); width:26px; height:26px; border-radius:5px; cursor:pointer; display:grid; place-items:center; font-size:16px; }
+.areaCourtWrapper { width:100%; }
+.areaHint { font-size:10px; color:var(--text-secondary); text-align:center; line-height:1.4; margin:8px 0 0; }
 .zoneChoices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
 .zoneChoices button { display:flex; flex-direction:column; justify-content:center; align-items:center; gap:9px; min-height:120px; padding:12px 6px; background:#1a2b38; color:#cce0ed; border:2px solid #345064; border-radius:7px; cursor:pointer; }
 .zoneChoices b { font-size:32px; }
 .zoneChoices span { font-size:14px; }
 .zoneChoices button[aria-pressed='true'] { background:#1b6cad; border-color:#92d1ff; color:white; box-shadow:0 0 20px #249dff44; }
 .gridMenu p { font-size:12px; color:var(--text-secondary); line-height:1.7; margin:16px 0 0; }
-@media(max-width:640px) { .map { padding:10px; } .court { gap:5px; } .zone { min-height:116px; } .zoneHeading { padding:5px; } .mapHeading { flex-wrap:wrap; } .gridMenu { padding:14px; } .zoneChoices button { min-height:100px; } .zoneChoices b { font-size:28px; } .zoneChoices span { font-size:11px; } }
+@media(max-width:640px) { .map { padding:10px; } .court { gap:5px; } .zone { min-height:116px; } .zoneHeading { padding:5px; } .mapHeading { flex-wrap:wrap; } .gridOverlay, .areaOverlay { padding:10px; align-items:center; justify-content:center; } .gridMenu, .areaCard { width:min(100%, 280px); padding:10px; } .zoneChoices button { min-height:100px; } .zoneChoices b { font-size:28px; } .zoneChoices span { font-size:11px; } }

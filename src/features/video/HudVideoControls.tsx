@@ -30,7 +30,17 @@ function currentSnapshot() {
   };
 }
 
-export function HudVideoControls({ focusHudHidden = false }: { focusHudHidden?: boolean }) {
+export interface HudVideoControlsProps {
+  focusHudHidden?: boolean;
+  focusMode?: boolean;
+  onToggleFocus?: () => void;
+}
+
+export function HudVideoControls({
+  focusHudHidden = false,
+  focusMode = false,
+  onToggleFocus
+}: HudVideoControlsProps) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState(currentSnapshot);
   const [seekError, setSeekError] = useState(false);
@@ -148,11 +158,25 @@ export function HudVideoControls({ focusHudHidden = false }: { focusHudHidden?: 
         <button type="button" aria-label={t('video.seekForward1','Seek forward 1 second')} disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() + 1000, true)}>+1s</button>
         <button type="button" aria-label={t('video.seekForward3','Seek forward 3 seconds')} disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() + 3000, true)}>+3s</button>
       </div>
-      <label className={styles.speedLabel}>{t('video.speed','Speed')}
-        <select aria-label={t('video.playbackSpeed','Playback speed')} disabled={!snapshot.ready} value={String(snapshot.rate)} onChange={(event) => videoPlayback.setPlaybackRate(Number(event.target.value))}>
-          {SPEEDS.map((rate) => <option key={rate} value={rate}>{rate.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}×</option>)}
-        </select>
-      </label>
+      <div className={styles.endGroup}>
+        <label className={styles.speedLabel}>{t('video.speed','Speed')}
+          <select aria-label={t('video.playbackSpeed','Playback speed')} disabled={!snapshot.ready} value={String(snapshot.rate)} onChange={(event) => videoPlayback.setPlaybackRate(Number(event.target.value))}>
+            {SPEEDS.map((rate) => <option key={rate} value={rate}>{rate.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}×</option>)}
+          </select>
+        </label>
+        {onToggleFocus && (
+          <button
+            type="button"
+            className={`${styles.focusBtn} ${focusMode ? styles.focusActive : ''}`}
+            aria-pressed={focusMode}
+            aria-label={focusMode ? t('scout.exit_focus', 'Exit focus mode') : t('scout.enter_focus', 'Enter focus mode')}
+            title={focusMode ? t('scout.exit_focus', 'Exit focus mode') : t('scout.focus_mode', 'Focus mode')}
+            onClick={onToggleFocus}
+          >
+            {focusMode ? t('scout.exit_hud', 'EXIT HUD') : t('scout.hud', 'HUD')}
+          </button>
+        )}
+      </div>
     </div>
     {seekError && <span role="status" className={styles.error}>{t('video.seekFailed','Unable to seek this video.')}</span>}
   </div>;

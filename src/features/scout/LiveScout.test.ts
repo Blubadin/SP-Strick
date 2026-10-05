@@ -23,17 +23,32 @@ describe('LiveScout interaction context routing', () => {
     const seek = { type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 } as ControllerIntent;
     const toggle = { type: 'VIDEO_CONTROL_TOGGLE' } as ControllerIntent;
     const cycleRate = { type: 'VIDEO_CONTROL_CYCLE_RATE' } as ControllerIntent;
+    const analogSeek = { type: 'VIDEO_ANALOG_SEEK', deltaMs: 500 } as ControllerIntent;
+    const seekStart = { type: 'VIDEO_SEEK_STARTED' } as ControllerIntent;
+    const seekEnd = { type: 'VIDEO_SEEK_ENDED' } as ControllerIntent;
+    const focusToggle = { type: 'TOGGLE_FOCUS_MODE' } as ControllerIntent;
+
     expect(routeLiveScoutIntent('LIVE_SCOUT', enter)).toBe('ENTER_VIDEO_CONTROL');
     expect(routeLiveScoutIntent('VIDEO_CONTROL', exit)).toBe('EXIT_VIDEO_CONTROL');
     expect(routeLiveScoutIntent('LIVE_SCOUT', { type: 'TOGGLE_VIDEO_PLAYBACK' })).toBe('SCOUT_TOGGLE_VIDEO');
-    for (const intent of [seek, toggle, cycleRate]) {
+    expect(routeLiveScoutIntent('LIVE_SCOUT', focusToggle)).toBe('TOGGLE_FOCUS_MODE');
+    expect(routeLiveScoutIntent('VIDEO_CONTROL', focusToggle)).toBe('TOGGLE_FOCUS_MODE');
+
+    for (const intent of [seek, toggle, cycleRate, analogSeek, seekStart, seekEnd]) {
       expect(routeLiveScoutIntent('VIDEO_CONTROL', intent)).toBe('VIDEO_CONTROL_COMMAND');
     }
     for (const context of ['PAUSE_MENU', 'RADIAL', 'QUICK_EDIT', 'QUICK_EDIT_RADIAL', 'DISCONNECTED'] as LiveScoutInteractionContext[]) {
-      for (const intent of [enter, exit, seek, toggle, cycleRate]) {
+      for (const intent of [enter, exit, seek, toggle, cycleRate, analogSeek, seekStart, seekEnd]) {
         expect(routeLiveScoutIntent(context, intent)).toBe('IGNORE');
       }
     }
+  });
+
+  it('allows opening/switching radials while in RADIAL context', () => {
+    expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'SKILL' })).toBe('OPEN_RADIAL_SKILL');
+    expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'ZONE' })).toBe('OPEN_RADIAL_ZONE');
+    expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'RESULT' })).toBe('OPEN_RADIAL_RESULT');
+    expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'TEAM_PLAYER' })).toBe('OPEN_RADIAL_TEAM_PLAYER');
   });
   it('cycles playback rates through the supported sequence', () => {
     expect(nextVideoPlaybackRate(0.25)).toBe(0.5);

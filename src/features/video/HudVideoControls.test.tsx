@@ -86,4 +86,22 @@ describe('HUD video controls', () => {
     expect(player.seek).toHaveBeenLastCalledWith(92_300);
     detach();
   });
+
+  it('renders focus mode toggle button and invokes onToggleFocus callback on click', () => {
+    const { detach } = setup();
+    const onToggleFocus = vi.fn();
+    const { rerender } = render(<HudVideoControls focusMode={false} onToggleFocus={onToggleFocus} />);
+
+    const focusBtn = screen.getByRole('button', { name: 'Enter focus mode' });
+    expect(focusBtn.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(focusBtn);
+    expect(onToggleFocus).toHaveBeenCalledTimes(1);
+
+    rerender(<HudVideoControls focusMode={true} onToggleFocus={onToggleFocus} />);
+    const exitFocusBtn = screen.getByRole('button', { name: 'Exit focus mode' });
+    expect(exitFocusBtn.getAttribute('aria-pressed')).toBe('true');
+
+    detach();
+  });
 });

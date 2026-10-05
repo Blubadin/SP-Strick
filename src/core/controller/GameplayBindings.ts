@@ -3,7 +3,7 @@ import type { SemanticControl } from './ControllerTypes';
 import { ALL_SEMANTIC_CONTROLS } from './ButtonStateMachine';
 
 export type GameplayAction = RadialCategory | Exclude<ControllerIntent['type'],
-  'OPEN_RADIAL' | 'RADIAL_SELECTION_CHANGED' | 'RADIAL_COMMIT' | 'RADIAL_CANCEL' | 'VIDEO_CONTROL_ENTER' | 'VIDEO_CONTROL_EXIT' | 'VIDEO_CONTROL_SEEK' | 'VIDEO_CONTROL_TOGGLE' | 'VIDEO_CONTROL_CYCLE_RATE'>;
+  'OPEN_RADIAL' | 'RADIAL_SELECTION_CHANGED' | 'RADIAL_COMMIT' | 'RADIAL_CANCEL' | 'VIDEO_CONTROL_ENTER' | 'VIDEO_CONTROL_EXIT' | 'VIDEO_CONTROL_SEEK' | 'VIDEO_CONTROL_TOGGLE' | 'VIDEO_CONTROL_CYCLE_RATE' | 'TOGGLE_FOCUS_MODE' | 'VIDEO_ANALOG_SEEK' | 'VIDEO_SEEK_STARTED' | 'VIDEO_SEEK_ENDED'>;
 export type GameplayBindings = Record<SemanticControl, GameplayAction>;
 
 export const DEFAULT_GAMEPLAY_BINDINGS: GameplayBindings = Object.freeze({

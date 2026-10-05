@@ -40,7 +40,8 @@ export type LiveScoutIntentRoute =
   | 'OPEN_RADIAL_SKILL'
   | 'OPEN_RADIAL_ZONE'
   | 'OPEN_RADIAL_RESULT'
-  | 'OPEN_RADIAL_TEAM_PLAYER';
+  | 'OPEN_RADIAL_TEAM_PLAYER'
+  | 'TOGGLE_FOCUS_MODE';
 
 const RADIAL_OPEN_ROUTES: Record<RadialCategory, LiveScoutIntentRoute> = {
   SKILL: 'OPEN_RADIAL_SKILL',
@@ -77,7 +78,13 @@ export function routeLiveScoutIntent(
     return context === 'VIDEO_CONTROL' ? 'EXIT_VIDEO_CONTROL' : 'IGNORE';
   }
   if (context === 'VIDEO_CONTROL') {
-    return intent.type === 'VIDEO_CONTROL_SEEK' || intent.type === 'VIDEO_CONTROL_TOGGLE' || intent.type === 'VIDEO_CONTROL_CYCLE_RATE'
+    if (intent.type === 'TOGGLE_FOCUS_MODE') return 'TOGGLE_FOCUS_MODE';
+    return intent.type === 'VIDEO_CONTROL_SEEK'
+      || intent.type === 'VIDEO_CONTROL_TOGGLE'
+      || intent.type === 'VIDEO_CONTROL_CYCLE_RATE'
+      || intent.type === 'VIDEO_ANALOG_SEEK'
+      || intent.type === 'VIDEO_SEEK_STARTED'
+      || intent.type === 'VIDEO_SEEK_ENDED'
       ? 'VIDEO_CONTROL_COMMAND'
       : 'IGNORE';
   }
@@ -94,11 +101,13 @@ export function routeLiveScoutIntent(
   if (context === 'RADIAL') {
     if (intent.type === 'PAUSE_SESSION') return 'OPEN_PAUSE_MENU';
     if (intent.type === 'BOOKMARK_MOMENT') return 'SCOUT_BOOKMARK';
+    if (intent.type === 'OPEN_RADIAL') return RADIAL_OPEN_ROUTES[intent.category];
     return 'IGNORE';
   }
 
   if (context === 'QUICK_EDIT_RADIAL') {
     if (intent.type === 'PAUSE_SESSION') return 'QUICK_EDIT_CANCEL';
+    if (intent.type === 'OPEN_RADIAL') return QUICK_EDIT_RADIAL_ROUTES[intent.category];
     return 'IGNORE';
   }
 
@@ -123,6 +132,7 @@ export function routeLiveScoutIntent(
     case 'BOOKMARK_MOMENT': return 'SCOUT_BOOKMARK';
     case 'CLEAR_CURRENT_ACTION': return 'SCOUT_CLEAR_ACTION';
     case 'TOGGLE_VIDEO_PLAYBACK': return 'SCOUT_TOGGLE_VIDEO';
+    case 'TOGGLE_FOCUS_MODE': return 'TOGGLE_FOCUS_MODE';
     default: return 'IGNORE';
   }
 }

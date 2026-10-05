@@ -9,10 +9,14 @@ import { videoPlayback, type PlaybackAdapter } from '../../core/video/VideoPlayb
 import { intentDispatcher } from '../../core/controller/ControllerIntent';
 import '../../i18n';
 
+const renderCounts = vi.hoisted(() => ({ videoPanel: 0 }));
 vi.mock('./CourtMap', () => ({ CourtMap: () => <div data-testid="court-map" /> }));
 vi.mock('./RallyHistory', () => ({ RallyHistory: () => <div data-testid="rally-history" /> }));
 vi.mock('../video/ScoutVideoPanel', () => ({
-  ScoutVideoPanel: ({ focusHudHidden }: { focusHudHidden?: boolean }) => <div data-testid="video-panel" data-chrome-hidden={String(focusHudHidden ?? false)} />,
+  ScoutVideoPanel: ({ focusHudHidden }: { focusHudHidden?: boolean }) => {
+    renderCounts.videoPanel += 1;
+    return <div data-testid="video-panel" data-chrome-hidden={String(focusHudHidden ?? false)} />;
+  },
   AudioUnlockButton: () => null
 }));
 
@@ -41,6 +45,7 @@ function attachPlayingVideo(playingInitially = true) {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  renderCounts.videoPanel = 0;
   useControllerStore.setState((state) => ({ state: { ...state.state, connected: false } }));
   useScoutStore.setState({
     ...initialScoutState,
@@ -124,7 +129,7 @@ describe('LiveScout focus mode', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
     const liveSurface = screen.getByTestId('live-scout-surface');
 
-    act(() => { vi.advanceTimersByTime(1000); });
+    act(() => { vi.advanceTimersByTime(2000); });
     fireEvent.pointerMove(liveSurface);
     act(() => { vi.advanceTimersByTime(1100); });
     fireEvent.touchStart(liveSurface);
@@ -137,5 +142,19 @@ describe('LiveScout focus mode', () => {
 
     act(() => { vi.advanceTimersByTime(1100); });
     expect(liveSurface.getAttribute('data-hud-hidden')).toBe('true');
+  });
+
+  it('does not rerender main content for pointer moves while the HUD is visible', () => {
+    useScoutStore.setState({ sessionId: 'focus-test-session' });
+    renderLiveScout();
+    fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
+    const liveSurface = screen.getByTestId('live-scout-surface');
+    const panelRenders = renderCounts.videoPanel;
+
+    fireEvent.pointerMove(liveSurface);
+    fireEvent.pointerMove(liveSurface);
+    fireEvent.pointerMove(liveSurface);
+
+    expect(renderCounts.videoPanel).toBe(panelRenders);
   });
 });

@@ -82,9 +82,9 @@ export function LiveScout() {
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [hudHidden, setHudHidden] = useState(false);
-  const [hudActivity, setHudActivity] = useState(0);
   const [videoPlaying, setVideoPlaying] = useState(() => videoPlayback.isPlaying());
   const [videoSourceId, setVideoSourceId] = useState(() => videoPlayback.getEventTiming().videoSourceId);
+  const focusHudTimerRef = useRef<number | null>(null);
 
   const activeSectorRef = useRef<number | null>(null);
   const activeWheelRef = useRef<ActiveWheelType | null>(null);
@@ -325,11 +325,24 @@ export function LiveScout() {
     setVideoSourceId(videoPlayback.getEventTiming().videoSourceId);
   }), []);
 
+  const clearFocusHudTimer = useCallback(() => {
+    if (focusHudTimerRef.current !== null) window.clearTimeout(focusHudTimerRef.current);
+    focusHudTimerRef.current = null;
+  }, []);
+  const scheduleFocusHudHide = useCallback(() => {
+    clearFocusHudTimer();
+    if (!focusMode || !videoPlaying) return;
+    focusHudTimerRef.current = window.setTimeout(() => {
+      focusHudTimerRef.current = null;
+      setHudHidden(true);
+    }, 3000);
+  }, [clearFocusHudTimer, focusMode, videoPlaying]);
+
   useEffect(() => {
-    if (!focusMode || !videoPlaying || hudHidden) return;
-    const timeout = window.setTimeout(() => setHudHidden(true), 3000);
-    return () => window.clearTimeout(timeout);
-  }, [focusMode, videoPlaying, hudHidden, hudActivity]);
+    if (focusMode && videoPlaying && !hudHidden) scheduleFocusHudHide();
+    else clearFocusHudTimer();
+    return clearFocusHudTimer;
+  }, [focusMode, videoPlaying, hudHidden, scheduleFocusHudHide, clearFocusHudTimer]);
 
   useEffect(() => {
     if (!focusMode) return;
@@ -346,12 +359,13 @@ export function LiveScout() {
   const revealFocusHud = useCallback(() => {
     if (!focusMode) return;
     setHudHidden(false);
-    setHudActivity((activity) => activity + 1);
-  }, [focusMode]);
+    scheduleFocusHudHide();
+  }, [focusMode, scheduleFocusHudHide]);
   const exitFocusMode = useCallback(() => {
+    clearFocusHudTimer();
     setFocusMode(false);
     setHudHidden(false);
-  }, []);
+  }, [clearFocusHudTimer]);
 
   // D-pad intents are translated above; the stick navigates the active modal at a steady repeat rate.
   useEffect(() => {

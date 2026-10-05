@@ -16,6 +16,7 @@
 .focusMode .topBar .scoreboard,
 .focusMode .topBar .pauseBtn { display:none; }
 .focusMode .topBar .topActions { position:absolute; top:16px; left:16px; pointer-events:auto; }
+.focusMode .controllerName { display:inline; font-size:.7rem; }
 .focusHudHidden .topBar { opacity:0; pointer-events:none; }
 .focusHudHidden[data-controller-connected="false"] .topBar { opacity:1; }
 .focusMode .mainGrid { display:block; min-height:0; }
@@ -48,7 +49,7 @@
   .focusScoreboard strong { font-size:1.1rem; }
   .focusExit { top:12px; right:12px; padding:7px 8px; font-size:.72rem; }
   .focusMode .topBar .topActions { top:60px; left:12px; }
-  .focusCurrentEvent { bottom:130px; left:12px; max-width:calc(100vw - 24px); }
+  .focusCurrentEvent { bottom:150px; left:12px; max-width:calc(100vw - 24px); }
   .focusMode .floatingFeedback, .focusMode .floatingError { right:12px; bottom:200px; max-width:calc(100vw - 24px); }
 }
 

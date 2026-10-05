@@ -28,7 +28,7 @@ export function AudioUnlockButton() {
 
 type PickerWindow = Window & { showOpenFilePicker?: (options: { multiple: boolean; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<LocalVideoHandle[]> };
 
-export function ScoutVideoPanel({ sessionId, focusHudHidden = false }: { sessionId: string; focusHudHidden?: boolean }) {
+export function ScoutVideoPanel({ sessionId, focusMode = false, focusHudHidden = false }: { sessionId: string; focusMode?: boolean; focusHudHidden?: boolean }) {
   const { t } = useTranslation();
   const fieldId = useId();
   const [sources, setSources] = useState<VideoSource[]>([]);
@@ -171,7 +171,7 @@ export function ScoutVideoPanel({ sessionId, focusHudHidden = false }: { session
     }
   };
 
-  return <section className={styles.panel} data-focus-hud-hidden={String(focusHudHidden)} aria-label={t('video.title', { defaultValue: 'Match video' })}>
+  return <section className={styles.panel} data-focus-mode={String(focusMode)} data-focus-hud-hidden={String(focusHudHidden)} aria-label={t('video.title', { defaultValue: 'Match video' })}>
     <div className={styles.header}>
       <div className={styles.headingBlock}>
         <h2>{t('video.title', { defaultValue: 'Match video' })}</h2>

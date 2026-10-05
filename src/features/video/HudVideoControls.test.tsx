@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { videoPlayback, type PlaybackAdapter } from '../../core/video/VideoPlayback';
 import { HudVideoControls } from './HudVideoControls';
+import '../../i18n';
 
 afterEach(cleanup);
 function setup() {

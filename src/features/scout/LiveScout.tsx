@@ -49,6 +49,7 @@ export function LiveScout() {
     teamAPlayers: s.teamAPlayers,
     teamBPlayers: s.teamBPlayers,
     activeTeam: s.activeTeam,
+    selectedPlayerId: s.selectedPlayerId,
     currentEvent: s.currentEvent,
     recentEvents: s.recentEvents,
     allEvents: s.allEvents,
@@ -86,6 +87,7 @@ export function LiveScout() {
   const [videoPlaying, setVideoPlaying] = useState(() => videoPlayback.isPlaying());
   const [videoSourceId, setVideoSourceId] = useState(() => videoPlayback.getEventTiming().videoSourceId);
   const focusHudTimerRef = useRef<number | null>(null);
+  const revealFocusHudRef = useRef<() => void>(() => {});
 
   const activeSectorRef = useRef<number | null>(null);
   const activeWheelRef = useRef<ActiveWheelType | null>(null);
@@ -558,7 +560,8 @@ export function LiveScout() {
   useLayoutEffect(() => {
     intentHandlerRef.current = handleIntent;
     releaseHandlerRef.current = handleWheelRelease;
-  }, [handleIntent,handleWheelRelease]);
+    revealFocusHudRef.current = revealFocusHud;
+  }, [handleIntent,handleWheelRelease,revealFocusHud]);
 
   // Subscribe once; refs keep this dispatcher and disconnect listener stable across renders.
   useEffect(() => {
@@ -568,6 +571,13 @@ export function LiveScout() {
     const unsubscribeController = useControllerStore.subscribe((store, previousStore) => {
       const connected = store.state.connected;
       const wasConnected = previousStore.state.connected;
+      if (connected && (store.state.buttons !== previousStore.state.buttons
+        || store.state.leftStick.x !== previousStore.state.leftStick.x
+        || store.state.leftStick.y !== previousStore.state.leftStick.y
+        || store.state.rightStick.x !== previousStore.state.rightStick.x
+        || store.state.rightStick.y !== previousStore.state.rightStick.y)) {
+        revealFocusHudRef.current();
+      }
       if (!connected) {
         activeWheelRef.current = null;
         activeSectorRef.current = null;
@@ -644,12 +654,17 @@ export function LiveScout() {
     : <RadialMenu options={wheelOptions} activeOptionId={activeOptionId} categoryLabel={wheelLabel}
         size={wheelSize} onChoose={item => activeWheel && chooseOption(activeWheel,item)} onCancel={() => setWheelOpen(null)}
         controllerHint={t('scout.release_hint','Release to confirm, or tap a choice')} />;
+  const focusPlayer = (scout.activeTeam === 'A' ? scout.teamAPlayers : scout.teamBPlayers)
+    .find(player => player.id === (scout.currentEvent.playerId ?? scout.selectedPlayerId));
+  const focusPlayerLabel = focusPlayer ? `#${focusPlayer.number}${focusPlayer.name ? ` ${focusPlayer.name}` : ''}`
+    : t('scout.no_player_selected','No player selected');
 
   return (
     <div
       className={`${styles.liveContainer} ${focusMode ? styles.focusMode : ''} ${focusMode && hudHidden ? styles.focusHudHidden : ''}`}
       data-testid="live-scout-surface"
       data-focus-mode={String(focusMode)}
+      data-controller-connected={String(ctrlState.connected)}
       data-hud-hidden={String(hudHidden)}
       onPointerMove={revealFocusHud}
       onPointerDown={revealFocusHud}
@@ -692,7 +707,7 @@ export function LiveScout() {
           >
             <ControllerGlyph control="MENU" />
           </button>
-          <div className={styles.connectionStatus}>
+          <div className={styles.connectionStatus} role="status">
             <span className={ctrlState.connected ? styles.dotConnected : styles.dotDisconnected} />
             <span className={styles.controllerName}>
               {ctrlState.connected ? profile.name : t('controller.disconnected')}
@@ -707,18 +722,18 @@ export function LiveScout() {
         <section className={styles.matchFocusArea}>
           {focusMode && <>
             <div className={styles.focusScoreboard} aria-label={t('scout.score','Score')}>
-              <span>{scout.teamA}</span><strong>{scout.scoreA}</strong>
+              <div className={styles.focusTeam} data-active={scout.activeTeam === 'A'}><span>{scout.teamA}</span><strong>{scout.scoreA}</strong></div>
               <span className={styles.focusSet}>{t('scout.set','Set {{set}}',{set:scout.currentSet})}</span>
-              <strong>{scout.scoreB}</strong><span>{scout.teamB}</span>
+              <div className={styles.focusTeam} data-active={scout.activeTeam === 'B'}><strong>{scout.scoreB}</strong><span>{scout.teamB}</span></div>
             </div>
             <div className={styles.focusCurrentEvent}>
               <span>{t('scout.current_event','CURRENT EVENT')}</span>
-              <strong>{scout.currentEvent.skill ? t(skillKey(scout.currentEvent.skill)) : t('scout.skill','Skill')+' —'} · {scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : t('scout.zone','Zone')+' —'} · {scout.currentEvent.evaluation !== undefined ? scout.currentEvent.evaluation > 0 ? '+1' : scout.currentEvent.evaluation === 0 ? t('result.pass','Pass') : '−1' : t('scout.result','Result')+' —'}</strong>
+              <strong>{scout.activeTeam} · {scout.activeTeam === 'A' ? scout.teamA : scout.teamB} · {focusPlayerLabel} · {scout.currentEvent.skill ? t(skillKey(scout.currentEvent.skill)) : t('scout.skill','Skill')+' —'} · {scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : t('scout.zone','Zone')+' —'} · {scout.currentEvent.evaluation !== undefined ? scout.currentEvent.evaluation > 0 ? '+1' : scout.currentEvent.evaluation === 0 ? t('result.pass','Pass') : '−1' : t('scout.result','Result')+' —'}</strong>
             </div>
             <button className={styles.focusExit} type="button" onClick={exitFocusMode}>{t('scout.exit_focus','Exit focus mode')}</button>
             {!videoSourceId && <div className={styles.focusEmpty}>{t('video.focus_empty','Add a video or continue scouting without one.')}</div>}
           </>}
-          <div className={styles.focusVideoPanel}>{scout.sessionId && <ScoutVideoPanel sessionId={scout.sessionId} focusHudHidden={focusMode && hudHidden} />}</div>
+          <div className={styles.focusVideoPanel}>{scout.sessionId && <ScoutVideoPanel sessionId={scout.sessionId} focusMode={focusMode} focusHudHidden={focusMode && hudHidden} />}</div>
           {!focusMode && <>
           <div className={styles.mapToolbar}>
             <span>{mapEvents[0]?.rallyNumber ? t('scout.rally_number','Rally {{number}}',{number:mapEvents[0].rallyNumber}) : t('scout.live','Live court')}</span>

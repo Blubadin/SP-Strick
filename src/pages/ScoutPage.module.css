@@ -33,6 +33,9 @@
   font-size: 0.8rem;
 }
 
+/* Focus keeps the compact connection status visible above the video controls. */
+:global([data-focus-mode="true"]) + .disconnectNotice { display:none; }
+
 @media (max-width: 520px) {
   .disconnectNotice {
     bottom: max(16px, env(safe-area-inset-bottom));

@@ -35,6 +35,15 @@
 .audioUnlock { display:flex; align-items:center; gap:7px; }
 .audioUnlock button { min-height:29px; white-space:nowrap; }
 .audioUnlock small { max-width:200px; color:var(--text-secondary); font-size:.67rem; }
+.panel[data-focus-mode="true"] { position:absolute; inset:0; display:block; padding:76px 16px 0; border:0; border-radius:0; background:#020305; }
+.panel[data-focus-mode="true"] .header,
+.panel[data-focus-mode="true"] .sourceBar,
+.panel[data-focus-mode="true"] .youtubeForm,
+.panel[data-focus-mode="true"] .empty,
+.panel[data-focus-mode="true"] .help,
+.panel[data-focus-mode="true"] .message,
+.panel[data-focus-mode="true"] .error { position:relative; z-index:21; max-width:min(440px,calc(100vw - 32px)); margin-bottom:8px; }
+.panel[data-focus-mode="true"] [data-video-host] { position:absolute; inset:0; width:100%; height:100%; max-height:none; aspect-ratio:auto; border-radius:0; }
 @media (max-width:700px) {
   .panel { padding:8px; }
   .headingBlock { flex-wrap:wrap; gap:4px 8px; }
@@ -42,5 +51,6 @@
   .urlRow input { flex-basis:100%; }
   .player { min-height:120px; max-height:38vh; }
   .audioUnlock small { max-width:130px; }
+  .panel[data-focus-mode="true"] { padding:100px 12px 0; }
 }
 @media (prefers-reduced-motion:reduce) { .panel button, .audioUnlock button { transition:none; } }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { videoPlayback } from '../../core/video/VideoPlayback';
 import styles from './HudVideoControls.module.css';
 
@@ -30,6 +31,7 @@ function currentSnapshot() {
 }
 
 export function HudVideoControls({ focusHudHidden = false }: { focusHudHidden?: boolean }) {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState(currentSnapshot);
   const [seekError, setSeekError] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -101,12 +103,12 @@ export function HudVideoControls({ focusHudHidden = false }: { focusHudHidden?: 
     requestSeek(target, true);
   };
 
-  return <div className={`${styles.controls} ${focusHudHidden ? styles.focusHudHidden : ''}`} role="group" aria-label="Video controls" data-ready={snapshot.ready} data-video-controls>
+  return <div className={`${styles.controls} ${focusHudHidden ? styles.focusHudHidden : ''}`} role="group" aria-label={t('video.controls','Video controls')} data-ready={snapshot.ready} data-video-controls>
     <div
       ref={timelineRef}
       className={styles.timeline}
       role="slider"
-      aria-label="Video timeline"
+      aria-label={t('video.timeline','Video timeline')}
       aria-valuemin={0}
       aria-valuemax={snapshot.durationMs}
       aria-valuenow={Math.min(snapshot.currentTimeMs, snapshot.durationMs || snapshot.currentTimeMs)}
@@ -138,20 +140,20 @@ export function HudVideoControls({ focusHudHidden = false }: { focusHudHidden?: 
     <div className={styles.controlRow}>
       <output className={styles.time} aria-live="off">{formatTime(snapshot.currentTimeMs)} <span>/</span> {formatTime(snapshot.durationMs)}</output>
       <div className={styles.transport}>
-        <button type="button" aria-label="Seek back 3 seconds" disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() - 3000, true)}>−3s</button>
-        <button type="button" aria-label="Seek back 1 second" disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() - 1000, true)}>−1s</button>
-        <button type="button" aria-label={snapshot.playing ? 'Pause video' : 'Play video'} className={styles.playButton} disabled={!snapshot.ready} onClick={() => videoPlayback.togglePlayback()}>
+        <button type="button" aria-label={t('video.seekBack3','Seek back 3 seconds')} disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() - 3000, true)}>−3s</button>
+        <button type="button" aria-label={t('video.seekBack1','Seek back 1 second')} disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() - 1000, true)}>−1s</button>
+        <button type="button" aria-label={snapshot.playing ? t('video.pause','Pause video') : t('video.play','Play video')} className={styles.playButton} disabled={!snapshot.ready} onClick={() => videoPlayback.togglePlayback()}>
           {snapshot.playing ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
         </button>
-        <button type="button" aria-label="Seek forward 1 second" disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() + 1000, true)}>+1s</button>
-        <button type="button" aria-label="Seek forward 3 seconds" disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() + 3000, true)}>+3s</button>
+        <button type="button" aria-label={t('video.seekForward1','Seek forward 1 second')} disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() + 1000, true)}>+1s</button>
+        <button type="button" aria-label={t('video.seekForward3','Seek forward 3 seconds')} disabled={!snapshot.ready} onClick={() => requestSeek(videoPlayback.getCurrentTimeMs() + 3000, true)}>+3s</button>
       </div>
-      <label className={styles.speedLabel}>Speed
-        <select aria-label="Playback speed" disabled={!snapshot.ready} value={String(snapshot.rate)} onChange={(event) => videoPlayback.setPlaybackRate(Number(event.target.value))}>
+      <label className={styles.speedLabel}>{t('video.speed','Speed')}
+        <select aria-label={t('video.playbackSpeed','Playback speed')} disabled={!snapshot.ready} value={String(snapshot.rate)} onChange={(event) => videoPlayback.setPlaybackRate(Number(event.target.value))}>
           {SPEEDS.map((rate) => <option key={rate} value={rate}>{rate.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}×</option>)}
         </select>
       </label>
     </div>
-    {seekError && <span role="status" className={styles.error}>Unable to seek this video.</span>}
+    {seekError && <span role="status" className={styles.error}>{t('video.seekFailed','Unable to seek this video.')}</span>}
   </div>;
 }

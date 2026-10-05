@@ -66,6 +66,15 @@ afterEach(() => {
 });
 
 describe('LiveScout focus mode', () => {
+  it('keeps the active team and selected player visible in the action summary', () => {
+    useScoutStore.setState({ activeTeam: 'B', selectedPlayerId: 'b-7',
+      teamBPlayers: [{ id: 'b-7', number: 7, name: 'Mai' }],
+      currentEvent: { skill: 'block', originZone: 2, evaluation: 0 } });
+    renderLiveScout();
+    fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
+    expect(screen.getByText('B · Team B · #7 Mai · Block · Z2 · Pass')).toBeTruthy();
+  });
+
   it('enters focus mode and exits with Escape while keeping score and event summary visible', () => {
     renderLiveScout();
 
@@ -156,5 +165,22 @@ describe('LiveScout focus mode', () => {
     fireEvent.pointerMove(liveSurface);
 
     expect(renderCounts.videoPanel).toBe(panelRenders);
+  });
+
+  it('reveals hidden controls and restarts inactivity after analog controller input', () => {
+    attachPlayingVideo();
+    useControllerStore.setState((state) => ({ state: { ...state.state, connected: true } }));
+    renderLiveScout();
+    fireEvent.click(screen.getByRole('button', { name: 'Focus mode' }));
+    const liveSurface = screen.getByTestId('live-scout-surface');
+    act(() => { vi.advanceTimersByTime(3100); });
+    expect(liveSurface.getAttribute('data-hud-hidden')).toBe('true');
+
+    act(() => useControllerStore.setState((state) => ({ state: {
+      ...state.state, leftStick: { x: 0.7, y: 0, magnitude: 0.7, angle: 0 }
+    } })));
+    expect(liveSurface.getAttribute('data-hud-hidden')).toBe('false');
+    act(() => { vi.advanceTimersByTime(3100); });
+    expect(liveSurface.getAttribute('data-hud-hidden')).toBe('true');
   });
 });

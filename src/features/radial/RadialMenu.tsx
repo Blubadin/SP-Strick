@@ -8,6 +8,12 @@ export interface RadialOptionItem {
   subLabel?: string;
 }
 
+const wheelSizes: Record<NonNullable<RadialMenuProps['size']>, string> = {
+  normal: '280px',
+  large: '300px',
+  extraLarge: '320px',
+};
+
 interface RadialMenuProps {
   options: RadialOptionItem[];
   activeOptionId: string | null;
@@ -47,8 +53,12 @@ export function RadialMenu({
   const activeOption = options.find((o) => o.id === activeOptionId);
 
   return (
-    <div className={styles.overlay}>
-      <div className={styles.wheelContainer} data-size={size}>
+    <div className={styles.overlay} style={{ '--backdrop-opacity': 0.12 } as React.CSSProperties}>
+      <div
+        className={styles.wheelContainer}
+        data-size={size}
+        style={{ '--preferred-size': wheelSizes[size] } as React.CSSProperties}
+      >
         {/* Subtle backdrop disc */}
         <div className={styles.wheelRing} />
 

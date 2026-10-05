@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useControllerStore } from '../../core/controller/ControllerStore';
+import { setVideoModifierContextEnabled } from '../../core/controller/GamepadPoller';
 import { useScoutStore, setVideoTimingProvider } from '../../core/scouting/ScoutStore';
 import { intentDispatcher, type ControllerIntent, type RadialCategory } from '../../core/controller/ControllerIntent';
 import { getHysteresisSector } from '../../core/controller/RadialSelector';
@@ -23,7 +24,7 @@ import { VOLLEYBALL_RESULTS } from '../../core/sports/volleyball/volleyball.rule
 import { ControllerGlyph } from '../../components/ControllerGlyph';
 import { hapticManager } from '../../core/controller/HapticManager';
 import type { ScoutingEvent } from '../../core/scouting/ScoutingEvent';
-import { canCommitRadialSelection, getContextAfterDisconnect, routeLiveScoutIntent, type LiveScoutInteractionContext } from './LiveScoutInput';
+import { canCommitRadialSelection, getContextAfterDisconnect, nextVideoPlaybackRate, routeLiveScoutIntent, type LiveScoutInteractionContext } from './LiveScoutInput';
 import styles from './LiveScout.module.css';
 
 type ActiveWheelType = 'SKILL' | 'ZONE' | 'RESULT' | 'TEAM_PLAYER';
@@ -105,9 +106,10 @@ export function LiveScout() {
       contextRef.current = 'QUICK_EDIT';
     } else if (activeWheelRef.current) {
       contextRef.current = 'RADIAL';
-    } else {
+    } else if (contextRef.current !== 'VIDEO_CONTROL') {
       contextRef.current = 'LIVE_SCOUT';
     }
+    setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT' || contextRef.current === 'VIDEO_CONTROL');
   }, []);
 
   const setWheelOpen = useCallback((category: ActiveWheelType | null, control?:SemanticControl) => {
@@ -516,6 +518,15 @@ export function LiveScout() {
       case 'SCOUT_BOOKMARK': void scout.addBookmark(); break;
       case 'SCOUT_CLEAR_ACTION': void useScoutStore.getState().clearCurrentEvent(); setInspectedEvent(null); break;
       case 'SCOUT_TOGGLE_VIDEO': videoPlayback.togglePlayback(); break;
+      case 'ENTER_VIDEO_CONTROL': contextRef.current = 'VIDEO_CONTROL'; setVideoModifierContextEnabled(true); break;
+      case 'EXIT_VIDEO_CONTROL': contextRef.current = 'LIVE_SCOUT'; setVideoModifierContextEnabled(true); break;
+      case 'VIDEO_CONTROL_COMMAND':
+        if (intent.type === 'VIDEO_CONTROL_SEEK') void videoPlayback.seekBy(intent.deltaMs);
+        else if (intent.type === 'VIDEO_CONTROL_TOGGLE') videoPlayback.togglePlayback();
+        else if (intent.type === 'VIDEO_CONTROL_CYCLE_RATE') {
+          videoPlayback.setPlaybackRate(nextVideoPlaybackRate(videoPlayback.getPlaybackRate()));
+        }
+        break;
       case 'OPEN_RADIAL_SKILL':
       case 'OPEN_RADIAL_ZONE':
       case 'OPEN_RADIAL_RESULT':
@@ -549,6 +560,7 @@ export function LiveScout() {
   // Subscribe once; refs keep this dispatcher and disconnect listener stable across renders.
   useEffect(() => {
     contextRef.current = useControllerStore.getState().state.connected ? 'LIVE_SCOUT' : 'DISCONNECTED';
+    setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT');
     const unsubscribeIntent = intentDispatcher.subscribe((intent) => intentHandlerRef.current(intent));
     const unsubscribeController = useControllerStore.subscribe((store, previousStore) => {
       const connected = store.state.connected;
@@ -559,6 +571,7 @@ export function LiveScout() {
         setActiveWheel(null);
         setSelectedSectorIdx(null);
         contextRef.current = getContextAfterDisconnect(contextRef.current);
+        setVideoModifierContextEnabled(false);
       } else if (!wasConnected) {
         activeWheelRef.current = null;
         activeSectorRef.current = null;

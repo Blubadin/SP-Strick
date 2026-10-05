@@ -6,7 +6,8 @@ export type LiveScoutInteractionContext =
   | 'PAUSE_MENU'
   | 'QUICK_EDIT'
   | 'QUICK_EDIT_RADIAL'
-  | 'DISCONNECTED';
+  | 'DISCONNECTED'
+  | 'VIDEO_CONTROL';
 
 export type LiveScoutIntentRoute =
   | 'IGNORE'
@@ -33,6 +34,9 @@ export type LiveScoutIntentRoute =
   | 'SCOUT_BOOKMARK'
   | 'SCOUT_CLEAR_ACTION'
   | 'SCOUT_TOGGLE_VIDEO'
+  | 'ENTER_VIDEO_CONTROL'
+  | 'EXIT_VIDEO_CONTROL'
+  | 'VIDEO_CONTROL_COMMAND'
   | 'OPEN_RADIAL_SKILL'
   | 'OPEN_RADIAL_ZONE'
   | 'OPEN_RADIAL_RESULT'
@@ -52,11 +56,31 @@ const QUICK_EDIT_RADIAL_ROUTES: Record<RadialCategory, LiveScoutIntentRoute> = {
   TEAM_PLAYER: 'QUICK_EDIT_OPEN_RADIAL_TEAM_PLAYER'
 };
 
+const VIDEO_PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+
+export function nextVideoPlaybackRate(currentRate: number): number {
+  const currentIndex = VIDEO_PLAYBACK_RATES.findIndex(rate => Math.abs(rate - currentRate) < 0.001);
+  if (currentIndex >= 0) return VIDEO_PLAYBACK_RATES[(currentIndex + 1) % VIDEO_PLAYBACK_RATES.length];
+  return VIDEO_PLAYBACK_RATES.find(rate => rate > currentRate) ?? VIDEO_PLAYBACK_RATES[0];
+}
+
 export function routeLiveScoutIntent(
   context: LiveScoutInteractionContext,
   intent: ControllerIntent
 ): LiveScoutIntentRoute {
   if (context === 'DISCONNECTED') return 'IGNORE';
+
+  if (intent.type === 'VIDEO_CONTROL_ENTER') {
+    return context === 'LIVE_SCOUT' ? 'ENTER_VIDEO_CONTROL' : 'IGNORE';
+  }
+  if (intent.type === 'VIDEO_CONTROL_EXIT') {
+    return context === 'VIDEO_CONTROL' ? 'EXIT_VIDEO_CONTROL' : 'IGNORE';
+  }
+  if (context === 'VIDEO_CONTROL') {
+    return intent.type === 'VIDEO_CONTROL_SEEK' || intent.type === 'VIDEO_CONTROL_TOGGLE' || intent.type === 'VIDEO_CONTROL_CYCLE_RATE'
+      ? 'VIDEO_CONTROL_COMMAND'
+      : 'IGNORE';
+  }
 
   if (context === 'PAUSE_MENU') {
     if (intent.type === 'PAUSE_SESSION') return 'RESUME_PAUSE_MENU';

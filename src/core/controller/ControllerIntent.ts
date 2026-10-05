@@ -17,7 +17,12 @@ export type ControllerIntent =
   | { type: 'BOOKMARK_MOMENT' }
   | { type: 'PAUSE_SESSION' }
   | { type: 'CLEAR_CURRENT_ACTION' }
-  | { type: 'TOGGLE_VIDEO_PLAYBACK' };
+  | { type: 'TOGGLE_VIDEO_PLAYBACK' }
+  | { type: 'VIDEO_CONTROL_ENTER' }
+  | { type: 'VIDEO_CONTROL_EXIT' }
+  | { type: 'VIDEO_CONTROL_SEEK'; deltaMs: number }
+  | { type: 'VIDEO_CONTROL_TOGGLE' }
+  | { type: 'VIDEO_CONTROL_CYCLE_RATE' };
 
 export type IntentListener = (intent: ControllerIntent) => void;
 

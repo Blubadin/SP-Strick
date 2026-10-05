@@ -4,6 +4,7 @@ import {
   canCommitRadialSelection,
   getContextAfterDisconnect,
   routeLiveScoutIntent,
+  nextVideoPlaybackRate,
   type LiveScoutInteractionContext
 } from './LiveScoutInput';
 
@@ -15,6 +16,33 @@ describe('LiveScout interaction context routing', () => {
       expect(routeLiveScoutIntent(context, {type:'CLEAR_CURRENT_ACTION'})).toBe('IGNORE');
       expect(routeLiveScoutIntent(context, {type:'TOGGLE_VIDEO_PLAYBACK'})).toBe('IGNORE');
     }
+  });
+  it('keeps video modifier actions isolated from scouting and modal contexts', () => {
+    const enter = { type: 'VIDEO_CONTROL_ENTER' } as ControllerIntent;
+    const exit = { type: 'VIDEO_CONTROL_EXIT' } as ControllerIntent;
+    const seek = { type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 } as ControllerIntent;
+    const toggle = { type: 'VIDEO_CONTROL_TOGGLE' } as ControllerIntent;
+    const cycleRate = { type: 'VIDEO_CONTROL_CYCLE_RATE' } as ControllerIntent;
+    expect(routeLiveScoutIntent('LIVE_SCOUT', enter)).toBe('ENTER_VIDEO_CONTROL');
+    expect(routeLiveScoutIntent('VIDEO_CONTROL', exit)).toBe('EXIT_VIDEO_CONTROL');
+    expect(routeLiveScoutIntent('LIVE_SCOUT', { type: 'TOGGLE_VIDEO_PLAYBACK' })).toBe('SCOUT_TOGGLE_VIDEO');
+    for (const intent of [seek, toggle, cycleRate]) {
+      expect(routeLiveScoutIntent('VIDEO_CONTROL', intent)).toBe('VIDEO_CONTROL_COMMAND');
+    }
+    for (const context of ['PAUSE_MENU', 'RADIAL', 'QUICK_EDIT', 'QUICK_EDIT_RADIAL', 'DISCONNECTED'] as LiveScoutInteractionContext[]) {
+      for (const intent of [enter, exit, seek, toggle, cycleRate]) {
+        expect(routeLiveScoutIntent(context, intent)).toBe('IGNORE');
+      }
+    }
+  });
+  it('cycles playback rates through the supported sequence', () => {
+    expect(nextVideoPlaybackRate(0.25)).toBe(0.5);
+    expect(nextVideoPlaybackRate(0.5)).toBe(0.75);
+    expect(nextVideoPlaybackRate(0.75)).toBe(1);
+    expect(nextVideoPlaybackRate(1)).toBe(1.25);
+    expect(nextVideoPlaybackRate(1.25)).toBe(1.5);
+    expect(nextVideoPlaybackRate(1.5)).toBe(2);
+    expect(nextVideoPlaybackRate(2)).toBe(0.25);
   });
   it('turns pause-menu direction inputs into navigation instead of scouting mutations', () => {
     expect(routeLiveScoutIntent('PAUSE_MENU', { type: 'QUICK_RESULT_POSITIVE' })).toBe('PAUSE_NAVIGATE_UP');

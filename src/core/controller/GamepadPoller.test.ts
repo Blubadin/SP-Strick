@@ -23,7 +23,7 @@ function makeGamepad() {
 
 describe('GamepadPoller state publication', () => {
   let gamepad: Gamepad;
-  let stepFrame: () => void;
+  let stepFrame: (timestamp?: number) => void;
   let cleanupDetector: (() => void) | null;
   let unsubscribe: (() => void) | null;
   let intents: string[];
@@ -46,7 +46,7 @@ describe('GamepadPoller state publication', () => {
     });
     emitGamepadEvent = (type: string) =>
       listeners.get(type)?.({ gamepad } as unknown as Event);
-    stepFrame = () => callbacks.shift()?.(0);
+    stepFrame = (timestamp = 0) => callbacks.shift()?.(timestamp);
     cleanupDetector = null;
     intents = [];
     useControllerStore.setState({
@@ -74,22 +74,116 @@ describe('GamepadPoller state publication', () => {
     vi.unstubAllGlobals();
   });
 
-  it('routes trigger, Pass, and video shortcuts once per press', () => {
+  it('routes trigger and Pass shortcuts once per press', () => {
     cleanupDetector = listenForGamepadConnections();
     startGamepadPolling();
     stepFrame();
-    for (const index of [6, 7, 8, 15]) {
+    for (const index of [6, 7, 15]) {
       (gamepad.buttons as GamepadButton[])[index] = { pressed: true, touched: true, value: 1 };
     }
     stepFrame();
     stepFrame();
     expect(intents).toEqual(expect.arrayContaining([
-      'CLEAR_CURRENT_ACTION', 'QUICK_RESULT_NEUTRAL', 'TOGGLE_VIDEO_PLAYBACK'
+      'CLEAR_CURRENT_ACTION', 'QUICK_RESULT_NEUTRAL'
     ]));
     expect(intents.filter(type => type === 'QUICK_RESULT_NEUTRAL')).toHaveLength(2);
-    expect(intents).toHaveLength(4);
+    expect(intents).toHaveLength(3);
   });
 
+  it('toggles video once for a quick VIEW tap', () => {
+    cleanupDetector = listenForGamepadConnections();
+    startGamepadPolling();
+    stepFrame(0);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    expect(intents).toContain('VIDEO_CONTROL_ENTER');
+    expect(intents).not.toContain('TOGGLE_VIDEO_PLAYBACK');
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
+    stepFrame(100);
+    expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(1);
+    expect(intents.slice(-2)).toEqual(['VIDEO_CONTROL_EXIT', 'TOGGLE_VIDEO_PLAYBACK']);
+  });
+
+  it('dispatches video chords and exits on VIEW release without a second toggle', () => {
+    cleanupDetector = listenForGamepadConnections();
+    const received: Array<{ type: string; deltaMs?: number }> = [];
+    const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
+    startGamepadPolling();
+    stepFrame(0);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    (gamepad.buttons as GamepadButton[])[2] = { pressed: true, touched: true, value: 1 };
+    stepFrame(50);
+    expect(received).toContainEqual({ type: 'VIDEO_CONTROL_SEEK', deltaMs: -1000 });
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
+    stepFrame(80);
+    stopListening();
+    expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(0);
+    expect(intents.at(-1)).toBe('VIDEO_CONTROL_EXIT');
+  });
+
+  it('maps the complete video chord set to seek, toggle, and rate intents', () => {
+    cleanupDetector = listenForGamepadConnections();
+    const received: Array<{ type: string; deltaMs?: number }> = [];
+    const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
+    startGamepadPolling();
+    stepFrame(0);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    for (const index of [14, 15, 0, 3, 1, 2]) {
+      (gamepad.buttons as GamepadButton[])[index] = { pressed: true, touched: true, value: 1 };
+    }
+    stepFrame(40);
+    stopListening();
+    expect(received).toEqual(expect.arrayContaining([
+      { type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 },
+      { type: 'VIDEO_CONTROL_SEEK', deltaMs: 3000 },
+      { type: 'VIDEO_CONTROL_SEEK', deltaMs: -1000 },
+      { type: 'VIDEO_CONTROL_SEEK', deltaMs: 1000 },
+      { type: 'VIDEO_CONTROL_TOGGLE' },
+      { type: 'VIDEO_CONTROL_CYCLE_RATE' }
+    ]));
+    expect(intents).not.toContain('UNDO_LAST_EVENT');
+    expect(intents).not.toContain('QUICK_RESULT_NEUTRAL');
+  });
+  it('consumes unsupported controls while VIEW modifier is active', () => {
+    cleanupDetector = listenForGamepadConnections();
+    startGamepadPolling();
+    stepFrame(0);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    (gamepad.buttons as GamepadButton[])[4] = { pressed: true, touched: true, value: 1 };
+    stepFrame(20);
+    expect(intents).not.toContain('SELECT_TEAM_A');
+  });
+
+  it('keeps a customized VIEW binding as its configured gameplay action', () => {
+    cleanupDetector = listenForGamepadConnections();
+    usePreferencesStore.setState({ gameplayBindings: { ...DEFAULT_PREFERENCES.gameplayBindings, VIEW: 'BOOKMARK_MOMENT' } });
+    startGamepadPolling();
+    stepFrame(0);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    expect(intents).toEqual(['BOOKMARK_MOMENT']);
+  });
+
+  it('exits an active video modifier when polling stops or the controller disconnects', () => {
+    cleanupDetector = listenForGamepadConnections();
+    startGamepadPolling();
+    stepFrame(0);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    stopGamepadPolling();
+    expect(intents.filter(type => type === 'VIDEO_CONTROL_EXIT')).toHaveLength(1);
+    intents = [];
+    startGamepadPolling();
+    stepFrame(20);
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(30);
+    (gamepad as { connected: boolean }).connected = false;
+    stepFrame(40);
+    expect(intents.filter(type => type === 'VIDEO_CONTROL_EXIT')).toHaveLength(1);
+  });
   it('uses gameplay shortcuts independently of calibrated physical indices', () => {
     cleanupDetector = listenForGamepadConnections();
     useControllerStore.getState().setProfile({ ...STANDARD_PROFILE, buttons: { ...STANDARD_PROFILE.buttons, LEFT_TRIGGER: 17 } });

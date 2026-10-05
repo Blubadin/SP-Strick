@@ -28,7 +28,7 @@ export function RadialMenu({
   options,
   activeOptionId,
   categoryLabel,
-  controllerHint = 'Release to confirm',
+  controllerHint = 'Move LS · release to confirm',
   size = 'large', onChoose, onCancel
 }: RadialMenuProps) {
   const {t} = useTranslation();

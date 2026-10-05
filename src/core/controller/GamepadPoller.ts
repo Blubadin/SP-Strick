@@ -1,6 +1,6 @@
 import { useControllerStore } from './ControllerStore';
 import { ButtonStateMachine, hasButtonFrameEdges, ALL_SEMANTIC_CONTROLS } from './ButtonStateMachine';
-import { applyDeadzone, getSelectionStick } from './StickNormalizer';
+import { applyDeadzone, getVideoSeekStick } from './StickNormalizer';
 import { intentDispatcher, type ControllerIntent } from './ControllerIntent';
 import { hapticManager } from './HapticManager';
 import { rawGamepadSnapshotStore } from './RawGamepadSnapshot';
@@ -127,8 +127,8 @@ export function startGamepadPolling(): void {
               }
             }
 
-            const selectionStick = getSelectionStick({ leftStick, rightStick }, profile);
-            const absX = Math.abs(selectionStick.x);
+            const seekStick = getVideoSeekStick({ leftStick, rightStick }, profile);
+            const absX = Math.abs(seekStick.x);
             if (absX >= 0.25) {
               videoModifierChordUsed = true;
               let rateSecPerSec = 1.0;
@@ -136,7 +136,7 @@ export function startGamepadPolling(): void {
               else if (absX < 0.80) rateSecPerSec = 3.5;
               else rateSecPerSec = 10.0;
 
-              const sign = selectionStick.x < 0 ? -1 : 1;
+              const sign = seekStick.x < 0 ? -1 : 1;
               if (!analogSeeking) {
                 analogSeeking = true;
                 lastAnalogSeekTimestamp = timestamp;

@@ -44,10 +44,20 @@ export function applyDeadzone(
 }
 
 /**
- * Resolves the primary selection stick according to controller capabilities.
- * Right Stick is preferred when available in the active profile; otherwise Left Stick.
+ * Resolves the stick for scouting selection (Skill, Zone/Area, Result, Team/Player).
+ * Scouting selection ALWAYS uses Left Stick so right thumb taps A/B/X/Y and left thumb selects.
  */
-export function getSelectionStick(
+export function getScoutingSelectionStick(
+  state: Pick<ControllerState, 'leftStick'>
+): AxisState {
+  return state.leftStick;
+}
+
+/**
+ * Resolves the stick for video transport and analog scrubbing (when VIEW modifier is held).
+ * Right Stick is preferred when available on the active profile; otherwise Left Stick as fallback.
+ */
+export function getVideoSeekStick(
   state: Pick<ControllerState, 'leftStick' | 'rightStick'>,
   profile?: Pick<ControllerProfile, 'rightStick'> | null
 ): AxisState {

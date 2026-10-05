@@ -206,6 +206,31 @@ describe('GamepadPoller state publication', () => {
     stopListening();
   });
 
+  it('falls back to Left Stick for analog scrub when controller has no Right Stick configured', () => {
+    cleanupDetector = listenForGamepadConnections();
+    useControllerStore.getState().setProfile({ ...STANDARD_PROFILE, rightStick: undefined });
+    setVideoModifierContextEnabled(true);
+    const received: Array<{ type: string; deltaMs?: number }> = [];
+    const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
+    startGamepadPolling();
+    stepFrame(0);
+
+    // Hold VIEW
+    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+
+    // Deflect Left Stick X (axes[0])
+    (gamepad.axes as number[])[0] = 0.8;
+    stepFrame(20);
+    expect(received).toContainEqual({ type: 'VIDEO_SEEK_STARTED' });
+
+    stepFrame(120);
+    const analogSeeks = received.filter(i => i.type === 'VIDEO_ANALOG_SEEK');
+    expect(analogSeeks.length).toBeGreaterThan(0);
+
+    stopListening();
+  });
+
   it('consumes unsupported controls while VIEW modifier is active', () => {
     cleanupDetector = listenForGamepadConnections();
     setVideoModifierContextEnabled(true);

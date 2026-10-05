@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
-import { applyDeadzone } from './StickNormalizer';
+import { applyDeadzone, getScoutingSelectionStick, getVideoSeekStick } from './StickNormalizer';
 import { ButtonStateMachine } from './ButtonStateMachine';
 import {
   getHysteresisSector,
@@ -47,6 +47,27 @@ describe('StickNormalizer (applyDeadzone)', () => {
     const res = applyDeadzone(1.0, -1.0, 0.1, true, true);
     // inverted: X becomes -1.0, Y becomes 1.0 (down-left)
     expect(res.angle).toBe(135);
+  });
+
+  it('always routes scouting selection to Left Stick', () => {
+    const state = {
+      leftStick: { x: 0.7, y: 0.2, magnitude: 0.72, angle: 15 },
+      rightStick: { x: -0.9, y: 0, magnitude: 0.9, angle: 180 }
+    };
+    expect(getScoutingSelectionStick(state)).toEqual(state.leftStick);
+    expect(getScoutingSelectionStick(state)).not.toEqual(state.rightStick);
+  });
+
+  it('routes video seek to Right Stick when available and falls back to Left Stick', () => {
+    const state = {
+      leftStick: { x: 0.5, y: 0, magnitude: 0.5, angle: 0 },
+      rightStick: { x: -0.8, y: 0, magnitude: 0.8, angle: 180 }
+    };
+    // Profile with rightStick
+    expect(getVideoSeekStick(state, STANDARD_PROFILE)).toEqual(state.rightStick);
+    // Profile without rightStick (fallback)
+    expect(getVideoSeekStick(state, { ...STANDARD_PROFILE, rightStick: undefined })).toEqual(state.leftStick);
+    expect(getVideoSeekStick(state, null)).toEqual(state.leftStick);
   });
 });
 

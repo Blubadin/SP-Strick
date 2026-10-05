@@ -24,7 +24,7 @@ import { VOLLEYBALL_ZONES } from '../../core/sports/volleyball/volleyball.zones'
 import { VOLLEYBALL_RESULTS } from '../../core/sports/volleyball/volleyball.rules';
 import { ControllerGlyph } from '../../components/ControllerGlyph';
 import { getContextAfterDisconnect, nextVideoPlaybackRate, routeLiveScoutIntent, type LiveScoutInteractionContext } from './LiveScoutInput';
-import { getSelectionStick } from '../../core/controller/StickNormalizer';
+import { getScoutingSelectionStick } from '../../core/controller/StickNormalizer';
 import { TransientSelectorEngine } from './transientSelector';
 import { ControllerHudFeedback, type ControllerBadge, type SeekHudState } from './ControllerHudFeedback';
 import styles from './LiveScout.module.css';
@@ -608,7 +608,14 @@ export function LiveScout() {
       case 'SCOUT_CLEAR_ACTION': void useScoutStore.getState().clearCurrentEvent(); setInspectedEvent(null); break;
       case 'SCOUT_TOGGLE_VIDEO': videoPlayback.togglePlayback(); break;
       case 'TOGGLE_FOCUS_MODE': toggleFocusMode(); break;
-      case 'ENTER_VIDEO_CONTROL': contextRef.current = 'VIDEO_CONTROL'; setVideoModifierContextEnabled(true); break;
+      case 'ENTER_VIDEO_CONTROL':
+        if (activeWheelRef.current) {
+          selectorEngineRef.current?.cancel();
+          setWheelOpen(null);
+        }
+        contextRef.current = 'VIDEO_CONTROL';
+        setVideoModifierContextEnabled(true);
+        break;
       case 'EXIT_VIDEO_CONTROL':
         if (contextRef.current === 'VIDEO_CONTROL') contextRef.current = 'LIVE_SCOUT';
         setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT');
@@ -704,8 +711,8 @@ export function LiveScout() {
         syncInteractionContext();
       }
 
-      if (connected && activeWheelRef.current && selectorEngineRef.current?.isOpen()) {
-        const stick = getSelectionStick(store.state, store.profile);
+      if (connected && activeWheelRef.current && selectorEngineRef.current?.isOpen() && contextRef.current !== 'VIDEO_CONTROL') {
+        const stick = getScoutingSelectionStick(store.state);
         const currentCat = activeWheelRef.current;
         selectorEngineRef.current.updateStick(stick, (s) => {
           if (currentCat === 'ZONE') {
@@ -761,7 +768,7 @@ export function LiveScout() {
     ? <ZoneGridMenu selectedZone={activeOptionId ? Number(activeOptionId) : null} onChoose={zone => chooseOption('ZONE',{id:String(zone),label:`Z${zone}`})} onCancel={() => setWheelOpen(null)} />
     : <RadialMenu options={wheelOptions} activeOptionId={activeOptionId} categoryLabel={wheelLabel}
         size={wheelSize} onChoose={item => activeWheel && chooseOption(activeWheel,item)} onCancel={() => setWheelOpen(null)}
-        controllerHint={t('scout.release_hint','Release to confirm, or tap a choice')} />;
+        controllerHint={t('scout.release_hint', 'Move LS · release to confirm')} />;
   const focusPlayer = (scout.activeTeam === 'A' ? scout.teamAPlayers : scout.teamBPlayers)
     .find(player => player.id === (scout.currentEvent.playerId ?? scout.selectedPlayerId));
   const focusPlayerLabel = focusPlayer ? `#${focusPlayer.number}${focusPlayer.name ? ` ${focusPlayer.name}` : ''}`

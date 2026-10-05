@@ -665,6 +665,7 @@ export function LiveScout() {
       data-testid="live-scout-surface"
       data-focus-mode={String(focusMode)}
       data-controller-connected={String(ctrlState.connected)}
+      data-wheel-open={String(Boolean(activeWheel))}
       data-hud-hidden={String(hudHidden)}
       onPointerMove={revealFocusHud}
       onPointerDown={revealFocusHud}

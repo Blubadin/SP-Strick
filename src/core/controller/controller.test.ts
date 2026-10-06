@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
-import { applyDeadzone, getScoutingSelectionStick, getVideoSeekStick } from './StickNormalizer';
+import { applyDeadzone, getScoutingSelectorStick, getScoutingSelectionStick, getVideoSeekStick } from './StickNormalizer';
 import { ButtonStateMachine } from './ButtonStateMachine';
 import {
   getHysteresisSector,
@@ -11,6 +11,7 @@ import { detectProfile, STANDARD_PROFILE, XBOX_PROFILE, BUILT_IN_PROFILES, WGP12
 import type { ControllerProfile } from './ControllerTypes';
 import { useControllerStore } from './ControllerStore';
 import { hapticManager } from './HapticManager';
+import { migrateGameplayBindings, validateGameplayBindings } from './GameplayBindings';
 
 describe('StickNormalizer (applyDeadzone)', () => {
   it('suppresses input within deadzone', () => {
@@ -55,7 +56,8 @@ describe('StickNormalizer (applyDeadzone)', () => {
       rightStick: { x: -0.9, y: 0, magnitude: 0.9, angle: 180 }
     };
     expect(getScoutingSelectionStick(state)).toEqual(state.leftStick);
-    expect(getScoutingSelectionStick(state)).not.toEqual(state.rightStick);
+    expect(getScoutingSelectorStick(state)).toEqual(state.leftStick);
+    expect(getScoutingSelectorStick(state)).not.toEqual(state.rightStick);
   });
 
   it('routes video seek to Right Stick when available and falls back to Left Stick', () => {
@@ -397,5 +399,37 @@ describe('Controller Profile Detection', () => {
     for (const type of ['xbox', 'dualsense', 'dualshock', 'standard', 'custom'] as const) {
       expect(['FACE_SOUTH', 'FACE_EAST', 'FACE_WEST', 'FACE_NORTH'].map(control => getControllerGlyph(control as 'FACE_SOUTH', type))).toEqual(['A', 'B', 'X', 'Y']);
     }
+  });
+});
+
+describe('Binding Migration (Requirement 99)', () => {
+  it('migrates legacy TEAM_PLAYER to TEAM and CLEAR_CURRENT_ACTION on LEFT_TRIGGER to PLAYER', () => {
+    const legacyBindings = {
+      FACE_SOUTH: 'SKILL',
+      FACE_WEST: 'ZONE',
+      FACE_EAST: 'RESULT',
+      FACE_NORTH: 'TEAM_PLAYER',
+      LEFT_TRIGGER: 'CLEAR_CURRENT_ACTION',
+      LEFT_BUMPER: 'SELECT_TEAM_A',
+      RIGHT_BUMPER: 'SELECT_TEAM_B',
+      DPAD_UP: 'QUICK_RESULT_POSITIVE',
+      DPAD_RIGHT: 'QUICK_RESULT_NEUTRAL',
+      DPAD_DOWN: 'QUICK_RESULT_NEGATIVE',
+      DPAD_LEFT: 'UNDO_LAST_EVENT',
+      RIGHT_TRIGGER: 'BOOKMARK_MOMENT', // Custom assignment
+      VIEW: 'TOGGLE_VIDEO_PLAYBACK',
+      MENU: 'PAUSE_SESSION',
+      LEFT_STICK_BUTTON: 'EDIT_LAST_EVENT',
+      RIGHT_STICK_BUTTON: 'BOOKMARK_MOMENT'
+    };
+
+    const migrated = migrateGameplayBindings(legacyBindings);
+
+    // Verified requirements:
+    expect(migrated.FACE_NORTH).toBe('TEAM');
+    expect(migrated.LEFT_TRIGGER).toBe('PLAYER');
+    // Unrelated custom assignment preserved:
+    expect(migrated.RIGHT_TRIGGER).toBe('BOOKMARK_MOMENT');
+    expect(validateGameplayBindings(migrated)).toBe(true);
   });
 });

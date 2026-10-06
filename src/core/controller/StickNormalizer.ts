@@ -44,14 +44,17 @@ export function applyDeadzone(
 }
 
 /**
- * Resolves the stick for scouting selection (Skill, Zone/Area, Result, Team/Player).
- * Scouting selection ALWAYS uses Left Stick so right thumb taps A/B/X/Y and left thumb selects.
+ * Resolves the stick for scouting selectors (Skill, Zone/Position, Result, Team, Player).
+ * Scouting selection ALWAYS uses Left Stick.
  */
-export function getScoutingSelectionStick(
+export function getScoutingSelectorStick(
   state: Pick<ControllerState, 'leftStick'>
 ): AxisState {
   return state.leftStick;
 }
+
+export const getScoutingSelectionStick = getScoutingSelectorStick;
+
 
 /**
  * Resolves the stick for video transport and analog scrubbing (when VIEW modifier is held).

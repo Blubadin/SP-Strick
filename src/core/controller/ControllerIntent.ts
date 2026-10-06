@@ -1,6 +1,6 @@
 import type { SemanticControl } from './ControllerTypes';
 
-export type RadialCategory = 'SKILL' | 'ZONE' | 'RESULT' | 'TEAM_PLAYER';
+export type RadialCategory = 'SKILL' | 'ZONE' | 'RESULT' | 'TEAM' | 'PLAYER';
 
 export type ControllerIntent =
   | { type: 'OPEN_RADIAL'; category: RadialCategory; control?: SemanticControl }

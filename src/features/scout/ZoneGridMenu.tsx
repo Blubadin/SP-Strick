@@ -29,7 +29,7 @@ export function ZoneGridMenu({ selectedZone, onChoose, onCancel }: ZoneGridMenuP
           />
         </div>
         <p className={styles.areaHint}>
-          {t('scout.area_stick_hint', 'LS: Select court zone · Release to confirm')}
+          {t('scout.hint_zone', 'HOLD X · LS SELECT · RELEASE X CONFIRM')}
         </p>
       </section>
     </div>

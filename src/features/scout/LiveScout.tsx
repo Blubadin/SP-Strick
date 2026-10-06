@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useControllerStore } from '../../core/controller/ControllerStore';
-import { setVideoModifierContextEnabled } from '../../core/controller/GamepadPoller';
+import { setDirectVideoSeekEnabled, setVideoModifierContextEnabled } from '../../core/controller/GamepadPoller';
 import { useScoutStore, setVideoTimingProvider } from '../../core/scouting/ScoutStore';
 import type { ScoutingEvent } from '../../core/scouting/ScoutingEvent';
 import { intentDispatcher, type ControllerIntent, type RadialCategory } from '../../core/controller/ControllerIntent';
@@ -24,12 +24,13 @@ import { VOLLEYBALL_ZONES } from '../../core/sports/volleyball/volleyball.zones'
 import { VOLLEYBALL_RESULTS } from '../../core/sports/volleyball/volleyball.rules';
 import { ControllerGlyph } from '../../components/ControllerGlyph';
 import { getContextAfterDisconnect, nextVideoPlaybackRate, routeLiveScoutIntent, type LiveScoutInteractionContext } from './LiveScoutInput';
-import { getScoutingSelectionStick } from '../../core/controller/StickNormalizer';
-import { TransientSelectorEngine } from './transientSelector';
-import { ControllerHudFeedback, type ControllerBadge, type SeekHudState } from './ControllerHudFeedback';
+import { getScoutingSelectorStick } from '../../core/controller/StickNormalizer';
+import { HoldSelectorEngine } from './holdSelector';
+import { getActiveCourtPlayers } from '../../core/scouting/players';
+import { ControllerHudFeedback, type ActionFlash, type ControllerBadge, type SeekHudState } from './ControllerHudFeedback';
 import styles from './LiveScout.module.css';
 
-type ActiveWheelType = 'SKILL' | 'ZONE' | 'RESULT' | 'TEAM_PLAYER';
+type ActiveWheelType = 'SKILL' | 'ZONE' | 'RESULT' | 'TEAM' | 'PLAYER';
 
 export function LiveScout() {
   const { t } = useTranslation();
@@ -69,10 +70,11 @@ export function LiveScout() {
     addBookmark: s.addBookmark
   })));
   const wheelSize = usePreferencesStore(s => s.wheelSize);
-  const [inspectedEvent,setInspectedEvent] = useState<ScoutingEvent | null>(null);
-  const [pendingEnd,setPendingEnd] = useState<'set' | 'match' | null>(null);
+  const [inspectedEvent, setInspectedEvent] = useState<ScoutingEvent | null>(null);
+  const [pendingEnd, setPendingEnd] = useState<'set' | 'match' | null>(null);
   const pendingEndRef = useRef<'set' | 'match' | null>(null);
   const openingControlRef = useRef<SemanticControl | null>(null);
+  const openerObservedPressedRef = useRef(false);
 
   const [activeWheel, setActiveWheel] = useState<ActiveWheelType | null>(null);
   const [selectedSectorIdx, setSelectedSectorIdx] = useState<number | null>(null);
@@ -84,6 +86,7 @@ export function LiveScout() {
   const [quickEditError, setQuickEditError] = useState(false);
   const [pauseFocusIndex, setPauseFocusIndex] = useState(0);
   const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [interactionContext, setInteractionContext] = useState<LiveScoutInteractionContext>('DISCONNECTED');
   const [focusMode, setFocusMode] = useState(false);
   const [hudHidden, setHudHidden] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(() => videoPlayback.isPlaying());
@@ -95,6 +98,24 @@ export function LiveScout() {
   const badgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [seekState, setSeekState] = useState<SeekHudState | null>(null);
   const seekClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [actionFlash, setActionFlash] = useState<ActionFlash | null>(null);
+  const actionFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerActionFlash = useCallback((category: string, value: string, secondary?: string) => {
+    if (actionFlashTimerRef.current !== null) {
+      clearTimeout(actionFlashTimerRef.current);
+    }
+    setActionFlash({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      category,
+      value,
+      secondary
+    });
+    actionFlashTimerRef.current = setTimeout(() => {
+      setActionFlash(null);
+      actionFlashTimerRef.current = null;
+    }, 1000);
+  }, []);
 
   const showBadge = useCallback((badge: ControllerBadge) => {
     if (badgeTimerRef.current !== null) clearTimeout(badgeTimerRef.current);
@@ -142,13 +163,14 @@ export function LiveScout() {
 
   const activeSectorRef = useRef<number | null>(null);
   const activeWheelRef = useRef<ActiveWheelType | null>(null);
-  const selectorEngineRef = useRef<TransientSelectorEngine<RadialOptionItem> | null>(null);
+  const selectorEngineRef = useRef<HoldSelectorEngine<RadialOptionItem> | null>(null);
   const pauseMenuOpenRef = useRef(false);
   const quickEditOpenRef = useRef(false);
   const contextRef = useRef<LiveScoutInteractionContext>(ctrlState.connected ? 'LIVE_SCOUT' : 'DISCONNECTED');
   const quickEditChangesRef = useRef<Partial<ScoutingEvent>>({});
   const quickEditFocusRef = useRef(1);
   const pauseFocusRef = useRef(0);
+
   const syncInteractionContext = useCallback(() => {
     if (!useControllerStore.getState().state.connected) {
       contextRef.current = 'DISCONNECTED';
@@ -163,19 +185,29 @@ export function LiveScout() {
     } else if (contextRef.current !== 'VIDEO_CONTROL') {
       contextRef.current = 'LIVE_SCOUT';
     }
-    setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT' || contextRef.current === 'VIDEO_CONTROL');
+    const isLiveScout = contextRef.current === 'LIVE_SCOUT';
+    setInteractionContext(contextRef.current);
+    setVideoModifierContextEnabled(isLiveScout || contextRef.current === 'VIDEO_CONTROL');
+    // Direct RS seek is enabled ONLY in LIVE_SCOUT when no selector / menu / modal is open
+    setDirectVideoSeekEnabled(isLiveScout && !activeWheelRef.current && !pauseMenuOpenRef.current && !quickEditOpenRef.current);
   }, []);
 
   const setWheelOpen = useCallback((category: ActiveWheelType | null, control?: SemanticControl) => {
     openingControlRef.current = control ?? null;
+    openerObservedPressedRef.current = control ? Boolean(useControllerStore.getState().state.buttons[control]?.pressed) : false;
     activeWheelRef.current = category;
     activeSectorRef.current = null;
     setActiveWheel(category);
     setSelectedSectorIdx(null);
     syncInteractionContext();
     if (category) {
-      selectorEngineRef.current?.open(category, category === 'ZONE');
-      const catLabel = category === 'ZONE' ? t('scout.zone', 'Zone') : category === 'SKILL' ? t('scout.skill', 'Skill') : category === 'RESULT' ? t('scout.result', 'Result') : t('scout.team_player', 'Team / Player');
+      selectorEngineRef.current?.open(category, control ?? 'FACE_SOUTH', category === 'ZONE');
+      const catLabel =
+        category === 'ZONE' ? t('scout.zone', 'Zone')
+        : category === 'SKILL' ? t('scout.skill', 'Skill')
+        : category === 'RESULT' ? t('scout.result', 'Result')
+        : category === 'TEAM' ? t('scout.team', 'Team')
+        : t('scout.player', 'Player');
       showBadge({ title: catLabel });
     } else {
       selectorEngineRef.current?.cancel();
@@ -225,29 +257,24 @@ export function LiveScout() {
   }, [setQuickEditOpen]);
 
   const saveQuickEdit = useCallback(async () => {
-    const state = useScoutStore.getState();
-    const latestEvent = state.recentEvents[0];
-    const changes = quickEditChangesRef.current;
-    if (!latestEvent || Object.keys(changes).length === 0) {
-      setQuickEditOpen(false);
-      return;
-    }
-
+    const target = scout.recentEvents[0];
+    if (!target) return;
     setQuickEditSaving(true);
     setQuickEditError(false);
     try {
-      await state.editEvent(latestEvent.id, changes);
+      await scout.editEvent(target.id, quickEditChangesRef.current);
       setQuickEditOpen(false);
     } catch {
       setQuickEditError(true);
     } finally {
       setQuickEditSaving(false);
     }
-  }, [setQuickEditOpen]);
+  }, [scout, setQuickEditOpen]);
 
-  const activatePauseMenuItem = useCallback((index = pauseFocusRef.current) => {
+  const activatePauseMenuItem = useCallback((targetIndex?: number) => {
+    const index = targetIndex ?? pauseFocusRef.current;
     const state = useScoutStore.getState();
-    const finishEnd = (kind:'set'|'match') => {
+    const finishEnd = (kind: 'set' | 'match') => {
       void (kind === 'set' ? state.endSet() : state.endMatch()).then(() => {
         setPauseMenuOpen(false);
         setInspectedEvent(null);
@@ -259,7 +286,7 @@ export function LiveScout() {
       else { pendingEndRef.current = null; setPendingEnd(null); }
       return;
     }
-    const requestEnd = (kind:'set'|'match') => {
+    const requestEnd = (kind: 'set' | 'match') => {
       if (state.currentRallyId || state.currentEvent.skill || state.currentEvent.originZone || state.currentEvent.evaluation !== undefined) {
         pendingEndRef.current = kind; setPendingEnd(kind);
         pauseFocusRef.current = 0; setPauseFocusIndex(0);
@@ -288,28 +315,31 @@ export function LiveScout() {
       pauseFocusRef.current = next;
       setPauseFocusIndex(next);
     } else if (context === 'QUICK_EDIT') {
-      const next = (quickEditFocusRef.current + direction + 6) % 6;
+      // 5 fields (Team, Player, Skill, Zone, Result) + 2 actions (Save, Cancel) = 7 items
+      const count = 7;
+      const next = (quickEditFocusRef.current + direction + count) % count;
       quickEditFocusRef.current = next;
       setQuickEditFocusIndex(next);
     }
   }, []);
 
-  const activateQuickEditRadial = useCallback((category: RadialCategory, control?:SemanticControl) => {
+  const activateQuickEditRadial = useCallback((category: RadialCategory, control?: SemanticControl) => {
     const focusIndex = quickEditFocusRef.current;
-    if (category === 'SKILL' && focusIndex === 4) {
+    if (category === 'SKILL' && focusIndex === 5) {
       void saveQuickEdit();
       return;
     }
-    if ((category === 'SKILL' && focusIndex === 5) || (category === 'RESULT' && focusIndex === 5)) {
+    if ((category === 'SKILL' && focusIndex === 6) || (category === 'RESULT' && focusIndex === 6)) {
       cancelQuickEdit();
       return;
     }
 
     const fieldForCategory: Record<RadialCategory, number> = {
-      TEAM_PLAYER: 0,
-      SKILL: 1,
-      ZONE: 2,
-      RESULT: 3
+      TEAM: 0,
+      PLAYER: 1,
+      SKILL: 2,
+      ZONE: 3,
+      RESULT: 4
     };
     if (focusIndex === fieldForCategory[category]) setWheelOpen(category, control);
   }, [cancelQuickEdit, saveQuickEdit, setWheelOpen]);
@@ -472,38 +502,33 @@ export function LiveScout() {
         label: r.label
       }));
     }
-    if (activeWheel === 'TEAM_PLAYER') {
-      const eventTeam = scout.recentEvents[0]?.teamId;
-      const selectedTeam = isQuickEditOpen
-        ? String(quickEditChanges.teamId ?? eventTeam ?? scout.activeTeam)
-        : scout.activeTeam;
-      const items: RadialOptionItem[] = [
-        { id: 'TEAM_A', label: scout.teamA || t('team.a') },
-        { id: 'TEAM_B', label: scout.teamB || t('team.b') }
+    if (activeWheel === 'TEAM') {
+      return [
+        { id: 'A', label: scout.teamA || t('team.a', 'Team A') },
+        { id: 'B', label: scout.teamB || t('team.b', 'Team B') }
       ];
-
-      // If active team has players defined, include them
-      const activePlayers =
-        selectedTeam === 'A' ? scout.teamAPlayers : scout.teamBPlayers;
-      if (activePlayers && activePlayers.length > 0) {
-        for (const p of activePlayers.slice(0, 6)) {
-          items.push({
-            id: `PLAYER_${p.id}`,
-            label: `#${p.number}`,
-            subLabel: p.name
-          });
-        }
-      }
-      return items;
+    }
+    if (activeWheel === 'PLAYER') {
+      const selectedTeam = isQuickEditOpen
+        ? String(quickEditChanges.teamId ?? scout.recentEvents[0]?.teamId ?? scout.activeTeam)
+        : scout.activeTeam;
+      const rawPlayers = selectedTeam === 'A' ? scout.teamAPlayers : scout.teamBPlayers;
+      const activePlayers = getActiveCourtPlayers(rawPlayers);
+      return activePlayers.map((p) => ({
+        id: p.id,
+        label: `#${p.number}`,
+        subLabel: p.name
+      }));
     }
     return [];
   }, [activeWheel, isQuickEditOpen, t, scout.teamA, scout.teamB, scout.activeTeam, scout.teamAPlayers, scout.teamBPlayers, scout.recentEvents, quickEditChanges]);
 
   const wheelLabel = useMemo(() => {
-    if (activeWheel === 'SKILL') return t('scout.skill');
-    if (activeWheel === 'ZONE') return t('scout.zone');
-    if (activeWheel === 'RESULT') return t('scout.result');
-    if (activeWheel === 'TEAM_PLAYER') return t('scout.team_player', 'Team / Player');
+    if (activeWheel === 'SKILL') return t('scout.skill', 'Skill');
+    if (activeWheel === 'ZONE') return t('scout.zone', 'Zone');
+    if (activeWheel === 'RESULT') return t('scout.result', 'Result');
+    if (activeWheel === 'TEAM') return t('scout.team', 'Team');
+    if (activeWheel === 'PLAYER') return t('scout.player', 'Player');
     return '';
   }, [activeWheel, t]);
 
@@ -512,15 +537,33 @@ export function LiveScout() {
       if (wheelType === 'SKILL') stageQuickEdit({ skill: item.id });
       else if (wheelType === 'ZONE') stageQuickEdit({ originZone: Number(item.id) });
       else if (wheelType === 'RESULT') stageQuickEdit({ evaluation: Number(item.id) });
-      else if (item.id === 'TEAM_A' || item.id === 'TEAM_B') stageQuickEdit({ teamId: item.id.slice(-1), playerId: undefined });
-      else if (item.id.startsWith('PLAYER_')) stageQuickEdit({ playerId: item.id.slice(7) });
+      else if (wheelType === 'TEAM') stageQuickEdit({ teamId: item.id as 'A' | 'B', playerId: undefined });
+      else if (wheelType === 'PLAYER') stageQuickEdit({ playerId: item.id });
     } else {
       setInspectedEvent(null);
-      if (wheelType === 'SKILL') void scout.updateCurrentEvent({ skill: item.id });
-      else if (wheelType === 'ZONE') void scout.updateCurrentEvent({ originZone: Number(item.id) });
-      else if (wheelType === 'RESULT') void scout.updateCurrentEvent({ evaluation: Number(item.id) });
-      else if (item.id === 'TEAM_A' || item.id === 'TEAM_B') scout.setActiveTeam(item.id.slice(-1) as 'A' | 'B');
-      else if (item.id.startsWith('PLAYER_')) scout.setSelectedPlayer(item.id.slice(7));
+      if (wheelType === 'SKILL') {
+        void scout.updateCurrentEvent({ skill: item.id });
+        triggerActionFlash(t('scout.skill', 'SKILL'), item.label.toUpperCase());
+      } else if (wheelType === 'ZONE') {
+        void scout.updateCurrentEvent({ originZone: Number(item.id) });
+        triggerActionFlash(t('scout.position', 'POSITION'), `ZONE ${item.id}`);
+      } else if (wheelType === 'RESULT') {
+        const val = Number(item.id) as -1 | 0 | 1;
+        void scout.updateCurrentEvent({ evaluation: val });
+        const resText = val === 1 ? '+1 POINT' : val === -1 ? '−1 POINT' : t('result.pass', 'PASS');
+        triggerActionFlash(t('scout.result', 'RESULT'), resText);
+      } else if (wheelType === 'TEAM') {
+        const teamSide = item.id as 'A' | 'B';
+        scout.setActiveTeam(teamSide);
+        const name = teamSide === 'A' ? (scout.teamA || t('team.a', 'Team A')) : (scout.teamB || t('team.b', 'Team B'));
+        triggerActionFlash(t('scout.team', 'TEAM'), name.toUpperCase());
+      } else if (wheelType === 'PLAYER') {
+        scout.setSelectedPlayer(item.id);
+        const rawPlayers = scout.activeTeam === 'A' ? scout.teamAPlayers : scout.teamBPlayers;
+        const player = rawPlayers.find((p) => p.id === item.id);
+        const jersey = player ? `#${player.number}` : item.label;
+        triggerActionFlash(t('scout.player', 'PLAYER'), jersey, player?.name?.toUpperCase());
+      }
     }
     selectorEngineRef.current?.destroy();
     activeWheelRef.current = null;
@@ -528,29 +571,26 @@ export function LiveScout() {
     setActiveWheel(null);
     setSelectedSectorIdx(null);
     syncInteractionContext();
-  }, [scout, stageQuickEdit, syncInteractionContext]);
+  }, [scout, stageQuickEdit, syncInteractionContext, triggerActionFlash, t]);
 
   const wheelOptionsRef = useRef<RadialOptionItem[]>([]);
   const wheelLabelRef = useRef('');
   const chooseOptionRef = useRef(chooseOption);
-  const showBadgeRef = useRef(showBadge);
   const syncInteractionContextRef = useRef(syncInteractionContext);
 
   useEffect(() => {
     wheelOptionsRef.current = wheelOptions;
     wheelLabelRef.current = wheelLabel;
     chooseOptionRef.current = chooseOption;
-    showBadgeRef.current = showBadge;
     syncInteractionContextRef.current = syncInteractionContext;
   });
 
   useEffect(() => {
-    const engine = new TransientSelectorEngine<RadialOptionItem>({
+    const engine = new HoldSelectorEngine<RadialOptionItem>({
       onCommit: (item) => {
         const cat = activeWheelRef.current;
         if (cat) {
           chooseOptionRef.current(cat, item);
-          showBadgeRef.current({ title: wheelLabelRef.current, value: item.label, isSuccess: true });
         }
       },
       onCancel: () => {
@@ -582,11 +622,16 @@ export function LiveScout() {
     revealFocusHud();
     const route = routeLiveScoutIntent(contextRef.current, intent);
     switch (route) {
-      case 'OPEN_PAUSE_MENU': exitFocusMode(); setPauseMenuOpen(true); break;
-      case 'RESUME_PAUSE_MENU': setPauseMenuOpen(false); break;
-      case 'OPEN_QUICK_EDIT':
-        if (useScoutStore.getState().recentEvents.length > 0) setQuickEditOpen(true);
+      case 'OPEN_PAUSE_MENU':
+        if (activeWheelRef.current) {
+          selectorEngineRef.current?.cancel();
+          setWheelOpen(null);
+        }
+        exitFocusMode();
+        setPauseMenuOpen(true);
         break;
+      case 'RESUME_PAUSE_MENU': setPauseMenuOpen(false); break;
+      case 'OPEN_QUICK_EDIT': setQuickEditOpen(true); break;
       case 'QUICK_EDIT_CANCEL': cancelQuickEdit(); break;
       case 'PAUSE_NAVIGATE_UP': moveNavigationFocus(-1); break;
       case 'PAUSE_NAVIGATE_DOWN': moveNavigationFocus(1); break;
@@ -597,12 +642,33 @@ export function LiveScout() {
       case 'QUICK_EDIT_OPEN_RADIAL_SKILL': activateQuickEditRadial('SKILL', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
       case 'QUICK_EDIT_OPEN_RADIAL_ZONE': activateQuickEditRadial('ZONE', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
       case 'QUICK_EDIT_OPEN_RADIAL_RESULT': activateQuickEditRadial('RESULT', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
-      case 'QUICK_EDIT_OPEN_RADIAL_TEAM_PLAYER': activateQuickEditRadial('TEAM_PLAYER', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
-      case 'SCOUT_SELECT_TEAM_A': scout.setActiveTeam('A'); break;
-      case 'SCOUT_SELECT_TEAM_B': scout.setActiveTeam('B'); break;
-      case 'SCOUT_RESULT_POSITIVE': void scout.updateCurrentEvent({ evaluation: 1 }); break;
-      case 'SCOUT_RESULT_NEUTRAL': void scout.updateCurrentEvent({ evaluation: 0 }); break;
-      case 'SCOUT_RESULT_NEGATIVE': void scout.updateCurrentEvent({ evaluation: -1 }); break;
+      case 'QUICK_EDIT_OPEN_RADIAL_TEAM': activateQuickEditRadial('TEAM', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
+      case 'QUICK_EDIT_OPEN_RADIAL_PLAYER': activateQuickEditRadial('PLAYER', intent.type === 'OPEN_RADIAL' ? intent.control : undefined); break;
+      case 'SCOUT_SELECT_TEAM_A': {
+        scout.setActiveTeam('A');
+        triggerActionFlash(t('scout.team', 'TEAM'), (scout.teamA || t('team.a', 'Team A')).toUpperCase());
+        break;
+      }
+      case 'SCOUT_SELECT_TEAM_B': {
+        scout.setActiveTeam('B');
+        triggerActionFlash(t('scout.team', 'TEAM'), (scout.teamB || t('team.b', 'Team B')).toUpperCase());
+        break;
+      }
+      case 'SCOUT_RESULT_POSITIVE': {
+        void scout.updateCurrentEvent({ evaluation: 1 });
+        triggerActionFlash(t('scout.result', 'RESULT'), '+1 POINT');
+        break;
+      }
+      case 'SCOUT_RESULT_NEUTRAL': {
+        void scout.updateCurrentEvent({ evaluation: 0 });
+        triggerActionFlash(t('scout.result', 'RESULT'), t('result.pass', 'PASS').toUpperCase());
+        break;
+      }
+      case 'SCOUT_RESULT_NEGATIVE': {
+        void scout.updateCurrentEvent({ evaluation: -1 });
+        triggerActionFlash(t('scout.result', 'RESULT'), '−1 POINT');
+        break;
+      }
       case 'SCOUT_UNDO': void scout.undoLastEvent(); break;
       case 'SCOUT_BOOKMARK': void scout.addBookmark(); break;
       case 'SCOUT_CLEAR_ACTION': void useScoutStore.getState().clearCurrentEvent(); setInspectedEvent(null); break;
@@ -618,7 +684,7 @@ export function LiveScout() {
         break;
       case 'EXIT_VIDEO_CONTROL':
         if (contextRef.current === 'VIDEO_CONTROL') contextRef.current = 'LIVE_SCOUT';
-        setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT');
+        syncInteractionContext();
         break;
       case 'VIDEO_CONTROL_COMMAND':
         if (intent.type === 'VIDEO_CONTROL_SEEK') {
@@ -644,17 +710,20 @@ export function LiveScout() {
       case 'OPEN_RADIAL_SKILL':
       case 'OPEN_RADIAL_ZONE':
       case 'OPEN_RADIAL_RESULT':
-      case 'OPEN_RADIAL_TEAM_PLAYER': {
+      case 'OPEN_RADIAL_TEAM':
+      case 'OPEN_RADIAL_PLAYER': {
         if (!useControllerStore.getState().state.connected) break;
-        const category: ActiveWheelType = route === 'OPEN_RADIAL_SKILL' ? 'SKILL'
-          : route === 'OPEN_RADIAL_ZONE' ? 'ZONE'
-            : route === 'OPEN_RADIAL_RESULT' ? 'RESULT' : 'TEAM_PLAYER';
-        if (activeWheelRef.current === category) {
-          selectorEngineRef.current?.cancel();
-          setWheelOpen(null);
-        } else {
-          setWheelOpen(category, intent.type === 'OPEN_RADIAL' ? intent.control : undefined);
+        // Hold selector ownership: ignore competing OPEN_RADIAL intents if a selector is already held!
+        if (activeWheelRef.current !== null) {
+          break;
         }
+        const category: ActiveWheelType =
+          route === 'OPEN_RADIAL_SKILL' ? 'SKILL'
+          : route === 'OPEN_RADIAL_ZONE' ? 'ZONE'
+          : route === 'OPEN_RADIAL_RESULT' ? 'RESULT'
+          : route === 'OPEN_RADIAL_TEAM' ? 'TEAM'
+          : 'PLAYER';
+        setWheelOpen(category, intent.type === 'OPEN_RADIAL' ? intent.control : undefined);
         break;
       }
       case 'IGNORE': break;
@@ -672,8 +741,12 @@ export function LiveScout() {
     setPauseMenuOpen,
     setQuickEditOpen,
     setWheelOpen,
-    toggleFocusMode
+    toggleFocusMode,
+    triggerActionFlash,
+    syncInteractionContext,
+    t
   ]);
+
   useLayoutEffect(() => {
     intentHandlerRef.current = handleIntent;
     revealFocusHudRef.current = revealFocusHud;
@@ -682,7 +755,8 @@ export function LiveScout() {
   // Subscribe once; refs keep this dispatcher and disconnect listener stable across renders.
   useEffect(() => {
     contextRef.current = useControllerStore.getState().state.connected ? 'LIVE_SCOUT' : 'DISCONNECTED';
-    setVideoModifierContextEnabled(contextRef.current === 'LIVE_SCOUT');
+    syncInteractionContext();
+
     const unsubscribeIntent = intentDispatcher.subscribe((intent) => intentHandlerRef.current(intent));
     const unsubscribeController = useControllerStore.subscribe((store, previousStore) => {
       const connected = store.state.connected;
@@ -702,6 +776,7 @@ export function LiveScout() {
         setSelectedSectorIdx(null);
         contextRef.current = getContextAfterDisconnect(contextRef.current);
         setVideoModifierContextEnabled(false);
+        setDirectVideoSeekEnabled(false);
       } else if (!wasConnected) {
         selectorEngineRef.current?.destroy();
         activeWheelRef.current = null;
@@ -711,8 +786,9 @@ export function LiveScout() {
         syncInteractionContext();
       }
 
+      // Check selector stick updates and physical opener button release
       if (connected && activeWheelRef.current && selectorEngineRef.current?.isOpen() && contextRef.current !== 'VIDEO_CONTROL') {
-        const stick = getScoutingSelectionStick(store.state);
+        const stick = getScoutingSelectorStick(store.state);
         const currentCat = activeWheelRef.current;
         selectorEngineRef.current.updateStick(stick, (s) => {
           if (currentCat === 'ZONE') {
@@ -721,22 +797,45 @@ export function LiveScout() {
             return wheelOptionsRef.current.find((o) => o.id === String(zoneNum)) ?? null;
           }
           const count = wheelOptionsRef.current.length;
+          if (count === 0) return null;
           const sectorIdx = getHysteresisSector(
             s.angle,
             s.magnitude,
             count,
             activeSectorRef.current,
-            { activationThreshold: 0.50, deactivationThreshold: 0.20, hysteresisDegrees: 6 }
+            { activationThreshold: 0.45, deactivationThreshold: 0.20, hysteresisDegrees: 6 }
           );
           if (sectorIdx === null || !wheelOptionsRef.current[sectorIdx]) return null;
           return wheelOptionsRef.current[sectorIdx];
         });
+
+        // Release check: physical button release commits highlighted selection (or cancels if none)
+        const opener = openingControlRef.current;
+        if (opener) {
+          const isPressed = Boolean(store.state.buttons[opener]?.pressed);
+          const wasReleased = Boolean(store.state.buttons[opener]?.releasedThisFrame);
+          if (isPressed) {
+            openerObservedPressedRef.current = true;
+          }
+          if (wasReleased || (openerObservedPressedRef.current && !isPressed)) {
+            openerObservedPressedRef.current = false;
+            openingControlRef.current = null;
+            selectorEngineRef.current.onOpenerReleased();
+            activeWheelRef.current = null;
+            activeSectorRef.current = null;
+            setActiveWheel(null);
+            setSelectedSectorIdx(null);
+            syncInteractionContext();
+          }
+        }
       }
     });
+
     return () => {
       unsubscribeIntent();
       unsubscribeController();
       setVideoModifierContextEnabled(false);
+      setDirectVideoSeekEnabled(false);
     };
   }, [syncInteractionContext]);
 
@@ -744,44 +843,76 @@ export function LiveScout() {
     selectedSectorIdx !== null && wheelOptions[selectedSectorIdx]
       ? wheelOptions[selectedSectorIdx].id
       : null;
+
   const quickEditEvent = scout.recentEvents[0];
   const quickEditTeamId = String(quickEditChanges.teamId ?? quickEditEvent?.teamId ?? scout.activeTeam);
   const quickEditTeamName = quickEditTeamId === 'A' ? scout.teamA : quickEditTeamId === 'B' ? scout.teamB : quickEditTeamId;
   const quickEditPlayerId = quickEditChanges.playerId ?? quickEditEvent?.playerId;
   const quickEditPlayer = [...scout.teamAPlayers, ...scout.teamBPlayers].find((player) => player.id === quickEditPlayerId);
+
   const quickEditFields = [
-    { index: 0, category: 'TEAM_PLAYER' as const, key: 'scout.team_player', fallback: 'Team / Player', glyph: 'FACE_NORTH' as const, value: quickEditPlayer ? `${quickEditTeamName} · #${quickEditPlayer.number}` : quickEditTeamName },
-    { index: 1, category: 'SKILL' as const, key: 'scout.skill', fallback: 'Skill', glyph: 'FACE_SOUTH' as const, value: quickEditChanges.skill ?? quickEditEvent?.skill },
-    { index: 2, category: 'ZONE' as const, key: 'scout.zone', fallback: 'Zone', glyph: 'FACE_WEST' as const, value: quickEditChanges.originZone ?? quickEditEvent?.originZone },
-    { index: 3, category: 'RESULT' as const, key: 'scout.result', fallback: 'Result', glyph: 'FACE_EAST' as const, value: quickEditChanges.evaluation ?? quickEditEvent?.evaluation }
+    { index: 0, category: 'TEAM' as const, key: 'scout.team', fallback: 'Team', glyph: 'FACE_NORTH' as const, value: quickEditTeamName },
+    { index: 1, category: 'PLAYER' as const, key: 'scout.player', fallback: 'Player', glyph: 'LEFT_TRIGGER' as const, value: quickEditPlayer ? `#${quickEditPlayer.number}${quickEditPlayer.name ? ` ${quickEditPlayer.name}` : ''}` : '—' },
+    { index: 2, category: 'SKILL' as const, key: 'scout.skill', fallback: 'Skill', glyph: 'FACE_SOUTH' as const, value: quickEditChanges.skill ?? quickEditEvent?.skill },
+    { index: 3, category: 'ZONE' as const, key: 'scout.zone', fallback: 'Zone', glyph: 'FACE_WEST' as const, value: quickEditChanges.originZone ?? quickEditEvent?.originZone },
+    { index: 4, category: 'RESULT' as const, key: 'scout.result', fallback: 'Result', glyph: 'FACE_EAST' as const, value: quickEditChanges.evaluation ?? quickEditEvent?.evaluation }
   ];
+
   const inspected = scout.allEvents.find(event => event.id === inspectedEvent?.id);
-  const mapRallyId = inspected?.rallyId ?? scout.currentRallyId ?? scout.allEvents.at(-1)?.rallyId;
-  const mapEvents = mapRallyId ? scout.allEvents.filter(event => event.rallyId === mapRallyId)
-    : inspected ? [inspected] : scout.allEvents.slice(-1);
-  const mapTeam = inspected?.teamId ?? scout.activeTeam;
-  const inspectAction = (event:ScoutingEvent) => {
+  const inspectAction = (event: ScoutingEvent) => {
     setInspectedEvent(event);
     void videoPlayback.seekToEvent(event).catch(() => undefined);
   };
-  const renderSelection = () => activeWheel === 'ZONE'
-    ? <ZoneGridMenu selectedZone={activeOptionId ? Number(activeOptionId) : null} onChoose={zone => chooseOption('ZONE',{id:String(zone),label:`Z${zone}`})} onCancel={() => setWheelOpen(null)} />
-    : <RadialMenu options={wheelOptions} activeOptionId={activeOptionId} categoryLabel={wheelLabel}
-        size={wheelSize} onChoose={item => activeWheel && chooseOption(activeWheel,item)} onCancel={() => setWheelOpen(null)}
-        controllerHint={t('scout.release_hint', 'Move LS · release to confirm')} />;
+
+  const getSelectorHint = (cat: ActiveWheelType) => {
+    switch (cat) {
+      case 'SKILL': return t('scout.hint_skill', 'HOLD A · LS TO SELECT · RELEASE A TO CONFIRM');
+      case 'ZONE': return t('scout.hint_zone', 'HOLD X · LS SELECT · RELEASE X CONFIRM');
+      case 'RESULT': return t('scout.hint_result', 'HOLD B · LS TO SELECT · RELEASE B TO CONFIRM');
+      case 'TEAM': return t('scout.hint_team', 'HOLD Y · LS TO SELECT · RELEASE Y TO CONFIRM');
+      case 'PLAYER': return t('scout.hint_player', 'HOLD L2 · LS TO SELECT · RELEASE L2 TO CONFIRM');
+    }
+  };
+
+  const renderSelection = () => {
+    if (!activeWheel) return null;
+    if (activeWheel === 'ZONE') {
+      return (
+        <ZoneGridMenu
+          selectedZone={activeOptionId ? Number(activeOptionId) : null}
+          onChoose={(zone) => chooseOption('ZONE', { id: String(zone), label: `Z${zone}` })}
+          onCancel={() => setWheelOpen(null)}
+        />
+      );
+    }
+    return (
+      <RadialMenu
+        options={wheelOptions}
+        activeOptionId={activeOptionId}
+        categoryLabel={wheelLabel}
+        size={wheelSize}
+        onChoose={(item) => chooseOption(activeWheel, item)}
+        onCancel={() => setWheelOpen(null)}
+        controllerHint={getSelectorHint(activeWheel)}
+      />
+    );
+  };
+
   const focusPlayer = (scout.activeTeam === 'A' ? scout.teamAPlayers : scout.teamBPlayers)
     .find(player => player.id === (scout.currentEvent.playerId ?? scout.selectedPlayerId));
   const focusPlayerLabel = focusPlayer ? `#${focusPlayer.number}${focusPlayer.name ? ` ${focusPlayer.name}` : ''}`
-    : t('scout.no_player_selected','No player selected');
+    : t('scout.no_player_selected', 'No player selected');
 
   return (
     <div
-      className={`${styles.liveContainer} ${focusMode ? styles.focusMode : ''} ${focusMode && hudHidden ? styles.focusHudHidden : ''}`}
+      className={`${styles.surface} ${focusMode ? styles.focusMode : ''} ${focusMode && hudHidden ? styles.focusHudHidden : ''}`}
       data-testid="live-scout-surface"
       data-focus-mode={String(focusMode)}
       data-controller-connected={String(ctrlState.connected)}
-      data-wheel-open={String(Boolean(activeWheel))}
       data-hud-hidden={String(hudHidden)}
+      data-wheel-open={Boolean(activeWheel)}
+      data-wheel-type={activeWheel ?? ''}
+      data-interaction-context={interactionContext}
       onPointerMove={revealFocusHud}
       onPointerDown={revealFocusHud}
       onTouchStart={revealFocusHud}
@@ -834,6 +965,7 @@ export function LiveScout() {
             <span className={styles.controllerName}>
               {ctrlState.connected ? profile.name : t('controller.disconnected')}
             </span>
+            {wakeLockActive && <span className={styles.wakeLockBadge}>{t('scout.wake_lock_on', 'Wake lock on')}</span>}
           </div>
         </div>
       </header>
@@ -843,48 +975,60 @@ export function LiveScout() {
         {/* Match Focus / Video Area */}
         <section className={styles.matchFocusArea}>
           {focusMode && <>
-            <div className={styles.focusScoreboard} aria-label={t('scout.score','Score')}>
+            <div className={styles.focusScoreboard} aria-label={t('scout.score', 'Score')}>
               <div className={styles.focusTeam} data-active={scout.activeTeam === 'A'}><span>{scout.teamA}</span><strong>{scout.scoreA}</strong></div>
-              <span className={styles.focusSet}>{t('scout.set','Set {{set}}',{set:scout.currentSet})}</span>
+              <span className={styles.focusSet}>{t('scout.set', 'Set {{set}}', { set: scout.currentSet })}</span>
               <div className={styles.focusTeam} data-active={scout.activeTeam === 'B'}><strong>{scout.scoreB}</strong><span>{scout.teamB}</span></div>
             </div>
             <div className={styles.focusCurrentEvent}>
-              <span>{t('scout.current_event','CURRENT EVENT')}</span>
-              <strong>{scout.activeTeam} · {scout.activeTeam === 'A' ? scout.teamA : scout.teamB} · {focusPlayerLabel} · {scout.currentEvent.skill ? t(skillKey(scout.currentEvent.skill)) : t('scout.skill','Skill')+' —'} · {scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : t('scout.zone','Zone')+' —'} · {scout.currentEvent.evaluation !== undefined ? scout.currentEvent.evaluation > 0 ? '+1' : scout.currentEvent.evaluation === 0 ? t('result.pass','Pass') : '−1' : t('scout.result','Result')+' —'}</strong>
+              <span>{t('scout.current_event', 'CURRENT EVENT')}</span>
+              <strong>{scout.activeTeam} · {scout.activeTeam === 'A' ? scout.teamA : scout.teamB} · {focusPlayerLabel} · {scout.currentEvent.skill ? t(skillKey(scout.currentEvent.skill)) : t('scout.skill', 'Skill') + ' —'} · {scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : t('scout.zone', 'Zone') + ' —'} · {scout.currentEvent.evaluation !== undefined ? scout.currentEvent.evaluation > 0 ? '+1' : scout.currentEvent.evaluation === 0 ? t('result.pass', 'Pass') : '−1' : t('scout.result', 'Result') + ' —'}</strong>
             </div>
-            <button className={styles.focusExit} type="button" onClick={exitFocusMode}>{t('scout.exit_focus','Exit focus mode')}</button>
-            {!videoSourceId && <div className={styles.focusEmpty}>{t('video.focus_empty','Add a video or continue scouting without one.')}</div>}
-          </>}
-          <div className={styles.focusVideoPanel}>
-            {scout.sessionId && (
-              <ScoutVideoPanel
-                sessionId={scout.sessionId}
-                focusMode={focusMode}
-                focusHudHidden={focusMode && hudHidden}
-                onToggleFocus={toggleFocusMode}
-              />
-            )}
-          </div>
-          {!focusMode && <>
-          <div className={styles.mapToolbar}>
-            <span>{mapEvents[0]?.rallyNumber ? t('scout.rally_number','Rally {{number}}',{number:mapEvents[0].rallyNumber}) : t('scout.live','Live court')}</span>
-            {inspected && <button type="button" onClick={() => setInspectedEvent(null)}>{t('scout.back_to_live','Back to live')}</button>}
-          </div>
-          <CourtMap events={mapEvents} teamId={mapTeam} teamName={mapTeam === 'A' ? scout.teamA : scout.teamB}
-            draft={inspected ? {} : scout.currentEvent} previewZone={!inspected && activeWheel === 'ZONE' && activeOptionId ? Number(activeOptionId) : undefined}
-            selectedEventId={inspected?.id} onInspect={inspectAction} />
-          {inspected && <div className={styles.inspectionNotice}>
-            <strong>{t('scout.inspected_action','Selected action')} · {inspected.actionIndex ?? '—'}</strong>
-            <span>{inspected.teamId === 'A' ? scout.teamA : scout.teamB} · {t(skillKey(inspected.skill))} · Z{inspected.originZone} · {inspected.evaluation === 0 ? t('result.pass','Pass') : inspected.evaluation === 1 ? '+1' : '−1'}</span>
-            {inspected.videoTimeMs !== undefined && <span>{t('video.title','Match video')} · {formatVideoTime(inspected.videoTimeMs)}</span>}
-          </div>}
+            <button className={styles.focusExit} type="button" onClick={exitFocusMode}>{t('scout.exit_focus', 'Exit focus mode')}</button>
+            {!videoSourceId && <div className={styles.focusEmpty}>{t('video.focus_empty', 'Add a video or continue scouting without one.')}</div>}
           </>}
 
-          {/* Controller HUD Feedback */}
-          <ControllerHudFeedback badge={controllerBadge} seekState={seekState} />
+          {/* Integrated Video Panel */}
+          <div className={focusMode ? styles.focusVideoPanel : undefined}>
+            <ScoutVideoPanel
+              sessionId={scout.sessionId ?? ''}
+              focusMode={focusMode}
+              focusHudHidden={focusMode && hudHidden}
+              onToggleFocus={toggleFocusMode}
+            />
+          </div>
+
+          {/* Full Two-Sided Court Heatmap */}
+          {!focusMode && <>
+            <div className={styles.mapToolbar}>
+              <span>{t('scout.court_heatmap', 'Court Heatmap')}</span>
+              {inspected && <button type="button" onClick={() => setInspectedEvent(null)}>{t('scout.back_to_live', 'Back to live')}</button>}
+            </div>
+            <CourtMap
+              events={scout.allEvents}
+              teamId={scout.activeTeam}
+              teamName={scout.activeTeam === 'A' ? scout.teamA : scout.teamB}
+              teamA={scout.teamA}
+              teamB={scout.teamB}
+              draft={inspected ? {} : scout.currentEvent}
+              previewZone={!inspected && activeWheel === 'ZONE' && activeOptionId ? Number(activeOptionId) : undefined}
+              selectedEventId={inspected?.id}
+              onInspect={inspectAction}
+            />
+            {inspected && (
+              <div className={styles.inspectionNotice}>
+                <strong>{t('scout.inspected_action', 'Selected action')} · {inspected.actionIndex ?? '—'}</strong>
+                <span>{inspected.teamId === 'A' ? scout.teamA : scout.teamB} · {t(skillKey(inspected.skill))} · Z{inspected.originZone} · {inspected.evaluation === 0 ? t('result.pass', 'Pass') : inspected.evaluation === 1 ? '+1' : '−1'}</span>
+                {inspected.videoTimeMs !== undefined && <span>{t('video.title', 'Match video')} · {formatVideoTime(inspected.videoTimeMs)}</span>}
+              </div>
+            )}
+          </>}
+
+          {/* Controller HUD Feedback (Action Confirmation Flash & Video Seek HUD) */}
+          <ControllerHudFeedback badge={controllerBadge} seekState={seekState} actionFlash={actionFlash} />
 
           {/* Radial Overlay */}
-          {activeWheel && !isQuickEditOpen && renderSelection()}
+          {activeWheel && renderSelection()}
 
           {/* Transient Save / Undo Toast Notification */}
           {scout.lastFeedback && (
@@ -898,7 +1042,7 @@ export function LiveScout() {
           {scout.saveError && (
             <div className={styles.floatingError}>
               ⚠️ {t('scout.save_error', 'Could not save the event. Please retry.')}
-              <button type="button" onClick={() => void useScoutStore.getState().retrySave()}>{t('common.retry','Retry')}</button>
+              <button type="button" onClick={() => void useScoutStore.getState().retrySave()}>{t('common.retry', 'Retry')}</button>
             </div>
           )}
         </section>
@@ -930,9 +1074,39 @@ export function LiveScout() {
           <div className={styles.currentEventCard}>
             <span className={styles.panelSectionTitle}>{t('scout.current_event', 'CURRENT EVENT')}</span>
             <div className={styles.eventRowSlots}>
+              {/* Team Slot */}
+              <button
+                type="button"
+                onClick={() => setWheelOpen('TEAM')}
+                className={`${styles.eventSlot} ${styles.slotFilled}`}
+              >
+                <span className={styles.slotLabel}>{t('scout.team', 'Team')}</span>
+                <span className={styles.slotValue}>
+                  {scout.activeTeam === 'A' ? (scout.teamA || t('team.a', 'Team A')) : (scout.teamB || t('team.b', 'Team B'))}
+                </span>
+                <ControllerGlyph control="FACE_NORTH" className={styles.slotGlyph} />
+              </button>
+
+              {/* Player Slot */}
+              <button
+                type="button"
+                onClick={() => setWheelOpen('PLAYER')}
+                className={`${styles.eventSlot} ${(scout.currentEvent.playerId ?? scout.selectedPlayerId) ? styles.slotFilled : styles.slotEmpty}`}
+              >
+                <span className={styles.slotLabel}>{t('scout.player', 'Player')}</span>
+                <span className={styles.slotValue}>
+                  {focusPlayer ? `#${focusPlayer.number}${focusPlayer.name ? ` ${focusPlayer.name}` : ''}` : '—'}
+                </span>
+                <ControllerGlyph control="LEFT_TRIGGER" className={styles.slotGlyph} />
+              </button>
+
               {/* Skill Slot */}
-              <button type="button" onClick={() => { void audioFeedbackManager.unlock(); setWheelOpen('SKILL'); }} className={`${styles.eventSlot} ${scout.currentEvent.skill ? styles.slotFilled : styles.slotEmpty}`}>
-                <span className={styles.slotLabel}>{t('scout.skill')}</span>
+              <button
+                type="button"
+                onClick={() => { void audioFeedbackManager.unlock(); setWheelOpen('SKILL'); }}
+                className={`${styles.eventSlot} ${scout.currentEvent.skill ? styles.slotFilled : styles.slotEmpty}`}
+              >
+                <span className={styles.slotLabel}>{t('scout.skill', 'Skill')}</span>
                 <span className={styles.slotValue}>
                   {scout.currentEvent.skill
                     ? t(skillKey(scout.currentEvent.skill))
@@ -942,8 +1116,12 @@ export function LiveScout() {
               </button>
 
               {/* Zone Slot */}
-              <button type="button" onClick={() => setWheelOpen('ZONE')} className={`${styles.eventSlot} ${scout.currentEvent.originZone ? styles.slotFilled : styles.slotEmpty}`}>
-                <span className={styles.slotLabel}>{t('scout.zone')}</span>
+              <button
+                type="button"
+                onClick={() => setWheelOpen('ZONE')}
+                className={`${styles.eventSlot} ${scout.currentEvent.originZone ? styles.slotFilled : styles.slotEmpty}`}
+              >
+                <span className={styles.slotLabel}>{t('scout.zone', 'Zone')}</span>
                 <span className={styles.slotValue}>
                   {scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : '—'}
                 </span>
@@ -951,25 +1129,45 @@ export function LiveScout() {
               </button>
 
               {/* Result Slot */}
-              <button type="button" onClick={() => setWheelOpen('RESULT')}
+              <button
+                type="button"
+                onClick={() => setWheelOpen('RESULT')}
                 className={`${styles.eventSlot} ${
                   scout.currentEvent.evaluation !== undefined ? styles.slotFilled : styles.slotEmpty
                 }`}
               >
-                <span className={styles.slotLabel}>{t('scout.result')}</span>
+                <span className={styles.slotLabel}>{t('scout.result', 'Result')}</span>
                 <span className={styles.slotValue}>
                   {scout.currentEvent.evaluation !== undefined
                     ? scout.currentEvent.evaluation > 0
                       ? '+1'
-                      : scout.currentEvent.evaluation === 0 ? t('result.pass','Pass') : '−1'
+                      : scout.currentEvent.evaluation === 0 ? t('result.pass', 'Pass') : '−1'
                     : '—'}
                 </span>
                 <ControllerGlyph control="FACE_EAST" className={styles.slotGlyph} />
               </button>
             </div>
+
             <div className={styles.quickActions}>
-              <button type="button" onClick={() => void useScoutStore.getState().clearCurrentEvent()}><ControllerGlyph control="LEFT_TRIGGER" />{t('scout.clear_action','Clear action')}</button>
-              <button type="button" onClick={() => { void audioFeedbackManager.unlock(); void scout.updateCurrentEvent({evaluation:0}); }}><ControllerGlyph control="RIGHT_TRIGGER" />{t('result.pass','Pass')}</button>
+              <button
+                type="button"
+                onClick={() => {
+                  void useScoutStore.getState().clearCurrentEvent();
+                  setInspectedEvent(null);
+                }}
+              >
+                {t('scout.clear_action', 'Clear')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void audioFeedbackManager.unlock();
+                  void scout.updateCurrentEvent({ evaluation: 0 });
+                }}
+              >
+                <ControllerGlyph control="RIGHT_TRIGGER" />
+                {t('result.pass', 'Pass')}
+              </button>
             </div>
             <AudioUnlockButton />
           </div>
@@ -977,7 +1175,7 @@ export function LiveScout() {
           {/* Recent Events (3-6 latest) */}
           <div className={styles.recentSection}>
             <div className={styles.recentHeader}>
-              <span className={styles.panelSectionTitle}>{t('scout.rallies','RALLIES & ACTIONS')}</span>
+              <span className={styles.panelSectionTitle}>{t('scout.rallies', 'RALLIES & ACTIONS')}</span>
               <button
                 className={styles.undoBtn}
                 onClick={() => scout.undoLastEvent()}
@@ -988,35 +1186,42 @@ export function LiveScout() {
               </button>
             </div>
 
-            <div className={styles.recentList}>
-              <RallyHistory events={scout.allEvents} teamA={scout.teamA} teamB={scout.teamB}
-                teamAPlayers={scout.teamAPlayers} teamBPlayers={scout.teamBPlayers}
-                selectedEventId={inspected?.id} onInspect={inspectAction}
-                incompleteRallyIds={scout.rallies.filter(rally => rally.status === 'incomplete').map(rally => rally.id)} />
-            </div>
+            <RallyHistory
+              events={scout.allEvents}
+              teamA={scout.teamA}
+              teamB={scout.teamB}
+              teamAPlayers={scout.teamAPlayers}
+              teamBPlayers={scout.teamBPlayers}
+              selectedEventId={inspected?.id}
+              onInspect={inspectAction}
+              incompleteRallyIds={scout.rallies.filter((rally) => rally.status === 'incomplete').map((rally) => rally.id)}
+            />
           </div>
         </aside>}
       </main>
 
-      {/* Bottom Status Bar */}
-      <footer className={styles.bottomBar}>
-        <div className={styles.bottomLeft}>
-          <span className={styles.ctrlProfile}>{profile.name}</span>
-          <span className={styles.separator}>•</span>
-          <span className={ctrlState.connected ? styles.textSuccess : styles.textDanger}>
-            {ctrlState.connected ? t('controller.connected') : t('controller.disconnected')}
-          </span>
-          {wakeLockActive && <span className={styles.wakeLockBadge}>{t('scout.wake_lock_on', 'Wake lock on')}</span>}
-        </div>
-
-        <div className={styles.bottomRight}>
-          <span>{t('scout.actions','Actions')}: {scout.allEvents.length} · {t('scout.rallies_short','Rallies')}: {scout.rallies.filter(rally => rally.status === 'completed').length}</span>
-          <span className={styles.separator}>•</span>
-          <button
-            className={styles.bookmarkBtn}
-            onClick={() => scout.addBookmark()}
-            title={t('scout.bookmark_action', 'Bookmark moment')}
-          >
+      {/* Controller Guide Footer */}
+      <footer className={styles.footerBar}>
+        <div className={styles.footerShortcuts}>
+          <button type="button" className={styles.shortcutItem} onClick={() => setWheelOpen('SKILL')}>
+            <ControllerGlyph control="FACE_SOUTH" /> {t('scout.skill', 'Skill')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => setWheelOpen('ZONE')}>
+            <ControllerGlyph control="FACE_WEST" /> {t('scout.zone', 'Zone')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => setWheelOpen('RESULT')}>
+            <ControllerGlyph control="FACE_EAST" /> {t('scout.result', 'Result')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => setWheelOpen('TEAM')}>
+            <ControllerGlyph control="FACE_NORTH" /> {t('scout.team', 'Team')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => setWheelOpen('PLAYER')}>
+            <ControllerGlyph control="LEFT_TRIGGER" /> {t('scout.player', 'Player')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => setQuickEditOpen(true)}>
+            <ControllerGlyph control="LEFT_STICK_BUTTON" /> {t('scout.edit_last_short', 'Edit Last')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => scout.addBookmark()}>
             <ControllerGlyph control="RIGHT_STICK_BUTTON" /> 🔖
           </button>
         </div>
@@ -1031,9 +1236,9 @@ export function LiveScout() {
             <p className={styles.modalHint}>{t('session.controller_navigation_hint', 'Use the left stick or D-pad to navigate. South selects, East goes back, and Menu resumes.')}</p>
 
             {pendingEnd ? <div className={styles.modalActions}>
-              <p className={styles.modalHint}>{t('session.incomplete_warning','This rally is unfinished. Saved actions will remain marked incomplete and no point will be awarded. Continue?')}</p>
-              <button type="button" className={`${styles.modalBtn} ${pauseFocusIndex === 0 ? styles.modalBtnFocused : ''}`} onClick={() => activatePauseMenuItem(0)}>{t('common.back','Back')}</button>
-              <button type="button" className={`${styles.modalBtnDanger} ${pauseFocusIndex === 1 ? styles.modalBtnFocused : ''}`} onClick={() => activatePauseMenuItem(1)}>{pendingEnd === 'set' ? t('session.next_set','End Set & Start Next') : t('session.end_match','End Match')}</button>
+              <p className={styles.modalHint}>{t('session.incomplete_warning', 'This rally is unfinished. Saved actions will remain marked incomplete and no point will be awarded. Continue?')}</p>
+              <button type="button" className={`${styles.modalBtn} ${pauseFocusIndex === 0 ? styles.modalBtnFocused : ''}`} onClick={() => activatePauseMenuItem(0)}>{t('common.back', 'Back')}</button>
+              <button type="button" className={`${styles.modalBtnDanger} ${pauseFocusIndex === 1 ? styles.modalBtnFocused : ''}`} onClick={() => activatePauseMenuItem(1)}>{pendingEnd === 'set' ? t('session.next_set', 'End Set & Start Next') : t('session.end_match', 'End Match')}</button>
             </div> : <div className={styles.modalActions}>
               <button
                 className={`${styles.modalBtnPrimary} ${pauseFocusIndex === 0 ? styles.modalBtnFocused : ''}`}
@@ -1101,10 +1306,12 @@ export function LiveScout() {
                   >
                     <span>{t(field.key, field.fallback)}</span>
                     <strong>
-                      {field.index === 1 && field.value ? t(skillKey(String(field.value)))
-                        : field.index === 2 && field.value !== undefined ? `Z${field.value}`
-                          : field.index === 3 && field.value !== undefined ? Number(field.value) > 0 ? '+1' : Number(field.value) === 0 ? t('result.pass','Pass') : '−1'
-                            : field.index === 0 ? field.value : '—'}
+                      {field.index === 0 ? field.value
+                        : field.index === 1 ? field.value
+                        : field.index === 2 && field.value ? t(skillKey(String(field.value)))
+                        : field.index === 3 && field.value !== undefined ? `Z${field.value}`
+                        : field.index === 4 && field.value !== undefined ? Number(field.value) > 0 ? '+1' : Number(field.value) === 0 ? t('result.pass', 'Pass') : '−1'
+                        : '—'}
                     </strong>
                     <ControllerGlyph control={field.glyph} />
                   </button>
@@ -1118,28 +1325,23 @@ export function LiveScout() {
             <div className={styles.modalActions}>
               <button
                 type="button"
-                className={`${styles.modalBtnPrimary} ${quickEditFocusIndex === 4 ? styles.modalBtnFocused : ''}`}
-                disabled={quickEditSaving || !quickEditEvent}
-                onClick={() => { quickEditFocusRef.current = 4; setQuickEditFocusIndex(4); void saveQuickEdit(); }}
-                aria-current={quickEditFocusIndex === 4 ? 'true' : undefined}
+                className={`${styles.modalBtnPrimary} ${quickEditFocusIndex === 5 ? styles.modalBtnFocused : ''}`}
+                onClick={() => void saveQuickEdit()}
+                disabled={quickEditSaving}
+                aria-current={quickEditFocusIndex === 5 ? 'true' : undefined}
               >
-                {quickEditSaving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
+                {quickEditSaving ? t('common.saving', 'Saving...') : t('common.save', 'Save Changes')}
               </button>
               <button
                 type="button"
-                className={`${styles.modalBtn} ${quickEditFocusIndex === 5 ? styles.modalBtnFocused : ''}`}
-                onClick={() => { quickEditFocusRef.current = 5; setQuickEditFocusIndex(5); cancelQuickEdit(); }}
-                aria-current={quickEditFocusIndex === 5 ? 'true' : undefined}
+                className={`${styles.modalBtn} ${quickEditFocusIndex === 6 ? styles.modalBtnFocused : ''}`}
+                onClick={cancelQuickEdit}
+                aria-current={quickEditFocusIndex === 6 ? 'true' : undefined}
               >
                 {t('common.cancel', 'Cancel')}
               </button>
             </div>
           </div>
-          {activeWheel && (
-            <div className={styles.quickEditRadialLayer}>
-              {renderSelection()}
-            </div>
-          )}
         </div>
       )}
     </div>

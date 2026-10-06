@@ -48,7 +48,8 @@ describe('LiveScout interaction context routing', () => {
     expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'SKILL' })).toBe('OPEN_RADIAL_SKILL');
     expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'ZONE' })).toBe('OPEN_RADIAL_ZONE');
     expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'RESULT' })).toBe('OPEN_RADIAL_RESULT');
-    expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'TEAM_PLAYER' })).toBe('OPEN_RADIAL_TEAM_PLAYER');
+    expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'TEAM' })).toBe('OPEN_RADIAL_TEAM');
+    expect(routeLiveScoutIntent('RADIAL', { type: 'OPEN_RADIAL', category: 'PLAYER' })).toBe('OPEN_RADIAL_PLAYER');
   });
   it('cycles playback rates through the supported sequence', () => {
     expect(nextVideoPlaybackRate(0.25)).toBe(0.5);

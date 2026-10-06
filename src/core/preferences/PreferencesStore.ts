@@ -3,7 +3,7 @@ import { db, type AppSetting } from '../persistence/database';
 import i18n from '../../i18n';
 import { audioFeedbackManager } from './AudioFeedbackManager';
 
-import { DEFAULT_GAMEPLAY_BINDINGS, validateGameplayBindings, type GameplayBindings } from '../controller/GameplayBindings';
+import { DEFAULT_GAMEPLAY_BINDINGS, migrateGameplayBindings, validateGameplayBindings, type GameplayBindings } from '../controller/GameplayBindings';
 
 export type WheelSize = 'normal' | 'large' | 'extraLarge';
 export type AppLanguage = 'en' | 'th';
@@ -51,7 +51,7 @@ export function parsePreferences(records: AppSetting[]): Preferences {
     } else if (key === 'audioVolume') {
       if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) next.audioVolume = value;
     } else if (key === 'gameplayBindings') {
-      if (validateGameplayBindings(value)) next.gameplayBindings = { ...value };
+      next.gameplayBindings = migrateGameplayBindings(value);
     } else if (typeof value === 'boolean') {
       next[key] = value;
     }

@@ -17,6 +17,7 @@ let videoModifierActive = false;
 let videoModifierStartedAt = 0;
 let videoModifierChordUsed = false;
 let videoModifierContextEnabled = false;
+let directVideoSeekEnabled = false;
 let analogSeeking = false;
 let lastAnalogSeekTimestamp = 0;
 let accumulatedAnalogDeltaMs = 0;
@@ -36,7 +37,7 @@ function stickSignificantlyChanged(current: AxisState, previous: AxisState): boo
 }
 
 function endVideoModifier(): void {
-  if (analogSeeking) {
+  if (analogSeeking && videoModifierActive) {
     analogSeeking = false;
     lastAnalogSeekTimestamp = 0;
     accumulatedAnalogDeltaMs = 0;
@@ -52,6 +53,16 @@ function endVideoModifier(): void {
 export function setVideoModifierContextEnabled(enabled: boolean): void {
   videoModifierContextEnabled = enabled;
   if (!enabled) endVideoModifier();
+}
+
+export function setDirectVideoSeekEnabled(enabled: boolean): void {
+  directVideoSeekEnabled = enabled;
+  if (!enabled && analogSeeking && !videoModifierActive) {
+    analogSeeking = false;
+    lastAnalogSeekTimestamp = 0;
+    accumulatedAnalogDeltaMs = 0;
+    intentDispatcher.dispatch({ type: 'VIDEO_SEEK_ENDED' });
+  }
 }
 
 export function startGamepadPolling(): void {
@@ -127,14 +138,17 @@ export function startGamepadPolling(): void {
               }
             }
 
+            // Analog seek under VIEW: dual-stick uses RS; single-stick falls back to LS
             const seekStick = getVideoSeekStick({ leftStick, rightStick }, profile);
             const absX = Math.abs(seekStick.x);
-            if (absX >= 0.25) {
+            const absY = Math.abs(seekStick.y);
+            const isSeeking = absX >= 0.28 && absX > absY;
+            if (isSeeking) {
               videoModifierChordUsed = true;
               let rateSecPerSec = 1.0;
               if (absX < 0.50) rateSecPerSec = 1.0;
               else if (absX < 0.80) rateSecPerSec = 3.5;
-              else rateSecPerSec = 10.0;
+              else rateSecPerSec = 9.0;
 
               const sign = seekStick.x < 0 ? -1 : 1;
               if (!analogSeeking) {
@@ -169,6 +183,45 @@ export function startGamepadPolling(): void {
             endVideoModifier();
             if (shouldToggleTap) intentDispatcher.dispatch({ type: 'TOGGLE_VIDEO_PLAYBACK' });
           }
+        } else if (directVideoSeekEnabled && profile.rightStick) {
+          // Direct Right Stick video seek without VIEW (normal LIVE_SCOUT context)
+          const absX = Math.abs(rightStick.x);
+          const absY = Math.abs(rightStick.y);
+          const isSeeking = absX >= 0.28 && absX > absY;
+
+          if (isSeeking) {
+            let rateSecPerSec = 1.0;
+            if (absX < 0.50) rateSecPerSec = 1.0;
+            else if (absX < 0.80) rateSecPerSec = 3.5;
+            else rateSecPerSec = 9.0;
+
+            const sign = rightStick.x < 0 ? -1 : 1;
+            if (!analogSeeking) {
+              analogSeeking = true;
+              lastAnalogSeekTimestamp = timestamp;
+              accumulatedAnalogDeltaMs = 0;
+              intentDispatcher.dispatch({ type: 'VIDEO_SEEK_STARTED' });
+            } else {
+              const elapsed = timestamp - lastAnalogSeekTimestamp;
+              if (elapsed >= 90) {
+                lastAnalogSeekTimestamp = timestamp;
+                const deltaMs = Math.round(sign * rateSecPerSec * elapsed);
+                accumulatedAnalogDeltaMs += deltaMs;
+                intentDispatcher.dispatch({
+                  type: 'VIDEO_ANALOG_SEEK',
+                  deltaMs,
+                  speedMultiplier: rateSecPerSec,
+                  direction: sign < 0 ? 'backward' : 'forward',
+                  accumulatedDeltaMs: accumulatedAnalogDeltaMs
+                });
+              }
+            }
+          } else if (analogSeeking) {
+            analogSeeking = false;
+            lastAnalogSeekTimestamp = 0;
+            accumulatedAnalogDeltaMs = 0;
+            intentDispatcher.dispatch({ type: 'VIDEO_SEEK_ENDED' });
+          }
         }
 
         // Gameplay assignments use semantic controls; physical calibration remains in the profile.
@@ -201,8 +254,14 @@ export function stopGamepadPolling(): void {
   resetPollerState();
 }
 
-/** Resets poller internal button history and exits any active video modifier. */
+/** Resets poller internal button history and exits any active video modifier / seeking. */
 export function resetPollerState(): void {
+  if (analogSeeking) {
+    analogSeeking = false;
+    lastAnalogSeekTimestamp = 0;
+    accumulatedAnalogDeltaMs = 0;
+    intentDispatcher.dispatch({ type: 'VIDEO_SEEK_ENDED' });
+  }
   endVideoModifier();
   buttonStateMachine.reset();
   lastLeftStick = { x: 0, y: 0, magnitude: 0, angle: 0 };

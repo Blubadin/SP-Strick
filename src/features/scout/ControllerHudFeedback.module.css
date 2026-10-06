@@ -10,30 +10,127 @@
   gap: 8px;
 }
 
+/* Translucent Game-Like Action Confirmation Flash */
+.actionFlash {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgba(10, 16, 24, 0.58);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 16px rgba(56, 189, 248, 0.08);
+  backdrop-filter: blur(10px);
+  animation: flashIn 100ms cubic-bezier(0.16, 1, 0.3, 1), flashFade 250ms ease-in 700ms forwards;
+}
+
+@keyframes flashIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes flashFade {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.flashCategory {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #79b7ed;
+  margin-bottom: 2px;
+}
+
+.flashValue {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.flashSecondary {
+  font-size: 13px;
+  font-weight: 600;
+  color: #93c5fd;
+  margin-top: 3px;
+  letter-spacing: 0.04em;
+}
+
+/* Seek HUD Overlay */
+.seekOverlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(10, 15, 22, 0.72);
+  border: 1.5px solid rgba(41, 151, 255, 0.6);
+  color: #ffffff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(41, 151, 255, 0.25);
+  animation: flashIn 0.1s ease-out;
+  backdrop-filter: blur(10px);
+}
+
+.seekHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #64b5f6;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.seekSpeed {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.seekDelta {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0;
+}
+
+.seekTime {
+  font-size: 11px;
+  color: #a0bed6;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+/* Standard Status Badge */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
   border-radius: 6px;
-  background: rgba(13, 20, 28, 0.88);
+  background: rgba(13, 20, 28, 0.72);
   border: 1px solid rgba(89, 155, 214, 0.4);
   color: #e5f1fa;
   font-family: inherit;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-  animation: badgeIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: flashIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
   backdrop-filter: blur(8px);
-}
-
-@keyframes badgeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }
 
 .badgeTitle {
@@ -56,42 +153,10 @@
   color: #52e399;
 }
 
-/* Seek HUD Overlay - center of video or top right */
-.seekOverlay {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 16px;
-  border-radius: 8px;
-  background: rgba(10, 15, 22, 0.92);
-  border: 1.5px solid rgba(41, 151, 255, 0.6);
-  color: #ffffff;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(41, 151, 255, 0.25);
-  animation: badgeIn 0.1s ease-out;
-  backdrop-filter: blur(10px);
-}
-
-.seekHeader {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #64b5f6;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.seekDelta {
-  font-size: 16px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  margin: 2px 0;
-}
-
-.seekTime {
-  font-size: 11px;
-  color: #a0bed6;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+@media (prefers-reduced-motion: reduce) {
+  .actionFlash,
+  .seekOverlay,
+  .badge {
+    animation: none;
+  }
 }

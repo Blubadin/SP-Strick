@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listenForGamepadConnections } from './GamepadDetector';
-import { setVideoModifierContextEnabled, startGamepadPolling, stopGamepadPolling } from './GamepadPoller';
+import { setDirectVideoSeekEnabled, setVideoModifierContextEnabled, startGamepadPolling, stopGamepadPolling } from './GamepadPoller';
 import { intentDispatcher } from './ControllerIntent';
 import { STANDARD_PROFILE } from './ControllerProfile';
 import { useControllerStore } from './ControllerStore';
@@ -32,6 +32,7 @@ describe('GamepadPoller state publication', () => {
   beforeEach(() => {
     usePreferencesStore.setState({ ...DEFAULT_PREFERENCES });
     setVideoModifierContextEnabled(false);
+    setDirectVideoSeekEnabled(false);
     gamepad = makeGamepad();
     const callbacks: Array<FrameRequestCallback> = [];
     vi.stubGlobal('navigator', { getGamepads: () => [gamepad] });
@@ -85,9 +86,10 @@ describe('GamepadPoller state publication', () => {
     stepFrame();
     stepFrame();
     expect(intents).toEqual(expect.arrayContaining([
-      'CLEAR_CURRENT_ACTION', 'QUICK_RESULT_NEUTRAL'
+      'OPEN_RADIAL', 'QUICK_RESULT_NEUTRAL'
     ]));
     expect(intents.filter(type => type === 'QUICK_RESULT_NEUTRAL')).toHaveLength(2);
+    expect(intents.filter(type => type === 'OPEN_RADIAL')).toHaveLength(1);
     expect(intents).toHaveLength(3);
   });
 
@@ -363,7 +365,39 @@ describe('GamepadPoller state publication', () => {
     (gamepad as { connected: boolean }).connected = true;
     emitGamepadEvent('gamepadconnected');
     stepFrame();
-
     expect(intents.filter((type) => type === 'OPEN_RADIAL')).toHaveLength(2);
+  });
+
+  it('direct Right Stick analog seek operates without VIEW in LIVE_SCOUT context', () => {
+    cleanupDetector = listenForGamepadConnections();
+    setDirectVideoSeekEnabled(true);
+    startGamepadPolling();
+    stepFrame(0);
+
+    // Deflect Right Stick horizontally to the right
+    (gamepad.axes as number[])[2] = 0.8;
+    stepFrame(10);
+    expect(intents).toContain('VIDEO_SEEK_STARTED');
+
+    // Advance past throttle threshold
+    stepFrame(110);
+    expect(intents).toContain('VIDEO_ANALOG_SEEK');
+
+    // Return RS to neutral
+    (gamepad.axes as number[])[2] = 0;
+    stepFrame(120);
+    expect(intents).toContain('VIDEO_SEEK_ENDED');
+  });
+
+  it('direct Right Stick seek is blocked when directVideoSeekEnabled is false (e.g. selector open)', () => {
+    cleanupDetector = listenForGamepadConnections();
+    setDirectVideoSeekEnabled(false);
+    startGamepadPolling();
+    stepFrame(0);
+
+    (gamepad.axes as number[])[2] = 0.8;
+    stepFrame(10);
+    expect(intents).not.toContain('VIDEO_SEEK_STARTED');
+    expect(intents).not.toContain('VIDEO_ANALOG_SEEK');
   });
 });

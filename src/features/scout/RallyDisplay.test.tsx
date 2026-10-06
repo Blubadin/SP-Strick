@@ -25,14 +25,15 @@ describe('rally display', () => {
     expect(screen.getAllByText(/01:05/).length).toBeGreaterThan(0);
   });
 
-  it('filters map markers by displayed team and forwards the recorded action on click', () => {
+  it('displays zone heatmap and forwards the recorded action on click', () => {
     const inspect = vi.fn();
     render(<CourtMap events={[action(0),action(1,'B')]} teamId="A" teamName="Home" draft={{originZone:3,skill:'block'}} previewZone={3} onInspect={inspect} />);
-    const markers = screen.getAllByRole('button', {name:/View action/});
-    expect(markers).toHaveLength(1);
-    fireEvent.click(markers[0]);
-    expect(inspect).toHaveBeenCalledWith(expect.objectContaining({id:'action-0'}));
-    expect(screen.getByText('Block')).toBeTruthy();
+    const homeZ2Cell = screen.getByRole('button', { name: /Home Z2: 1/i });
+    expect(homeZ2Cell).toBeTruthy();
+    fireEvent.click(homeZ2Cell);
+    const actionRow = screen.getByRole('button', { name: /Inspect/i });
+    fireEvent.click(actionRow);
+    expect(inspect).toHaveBeenCalledWith(expect.objectContaining({ id: 'action-0' }));
     expect(screen.getByRole('status').textContent).toContain('Z3');
   });
 

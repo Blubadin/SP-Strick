@@ -65,7 +65,12 @@ export function RadialMenu({
         {/* Center hub */}
         <div className={styles.centerHub}>
           <span className={styles.categoryTitle}>{categoryLabel}</span>
-          {activeOption ? (
+          {count === 0 ? (
+            <div className={styles.emptyState}>
+              <strong className={styles.emptyTitle}>{t('scout.no_players', 'NO PLAYERS')}</strong>
+              <span className={styles.emptyHint}>{t('scout.add_roster_hint', 'Add roster in Match Setup')}</span>
+            </div>
+          ) : activeOption ? (
             <span className={styles.selectionPreview}>{activeOption.label}</span>
           ) : (
             <span className={styles.controllerHint}>{controllerHint}</span>

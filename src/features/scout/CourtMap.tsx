@@ -1,12 +1,14 @@
 import type { ScoutingEvent } from '../../core/scouting/ScoutingEvent';
 import { useTranslation } from 'react-i18next';
-import { VolleyballCourt } from './court/VolleyballCourt';
+import { VolleyballHeatmap } from './court/VolleyballHeatmap';
 import styles from './RallyDisplay.module.css';
 
 export interface CourtMapProps {
   events: ScoutingEvent[];
   teamId: string;
   teamName: string;
+  teamA?: string;
+  teamB?: string;
   draft: Partial<ScoutingEvent>;
   previewZone?: number | null;
   selectedEventId?: string;
@@ -17,29 +19,26 @@ export function CourtMap({
   events,
   teamId,
   teamName,
+  teamA,
+  teamB,
   draft,
   previewZone,
   selectedEventId,
   onInspect
 }: CourtMapProps) {
   const { t } = useTranslation();
-  const displayed = events.filter((event) => event.teamId === teamId);
   const currentZone = previewZone ?? draft.originZone;
+  const resolvedTeamA = teamA || (teamId === 'A' ? teamName : t('team.a', 'Team A'));
+  const resolvedTeamB = teamB || (teamId === 'B' ? teamName : t('team.b', 'Team B'));
 
   return (
-    <section className={styles.map} aria-label={t('scout.court_map', 'Court map')}>
-      <div className={styles.mapHeading}>
-        <strong>{teamName}</strong>
-        <span>
-          {t('scout.court_map', 'Court map')} · {displayed.length} {t('scout.actions', 'actions')}
-        </span>
-      </div>
-
+    <section className={styles.map} aria-label={t('scout.court_heatmap', 'Court heatmap')}>
       <div className={styles.courtMapWrapper}>
-        <VolleyballCourt
-          mode="map"
+        <VolleyballHeatmap
           events={events}
-          teamId={teamId}
+          teamA={resolvedTeamA}
+          teamB={resolvedTeamB}
+          activeTeam={teamId as 'A' | 'B'}
           draft={draft}
           previewZone={previewZone}
           selectedEventId={selectedEventId}
@@ -51,7 +50,7 @@ export function CourtMap({
         <span role="status">
           {currentZone
             ? `${t('scout.selecting', 'Selecting')} Z${currentZone}`
-            : t('scout.map_hint', 'Choose a zone to preview the action. Select a marker to inspect it.')}
+            : t('scout.heatmap_hint', 'Select any zone to inspect actions. Draft zone is highlighted live.')}
         </span>
         <span>{t('scout.zone_positions', 'Positions represent court zones')}</span>
       </div>

@@ -79,6 +79,28 @@
   margin-top: 2px;
 }
 
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.emptyTitle {
+  font-size: clamp(10px, 2.4cqw, 13px);
+  font-weight: 800;
+  color: #f87171;
+  letter-spacing: 0.06em;
+}
+
+.emptyHint {
+  font-size: clamp(8px, 1.8cqw, 10px);
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
 .sectorWrapper {
   position: absolute;
   top: 50%;

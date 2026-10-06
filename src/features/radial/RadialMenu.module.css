@@ -1,14 +1,13 @@
 .overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
-  padding: clamp(12px, 2.5vw, 28px);
-  background: rgba(11, 13, 16, var(--backdrop-opacity, 0.12));
-  z-index: 1000;
+  padding: clamp(16px, 3vw, 36px);
+  background: rgba(11, 13, 16, var(--backdrop-opacity, 0.35));
+  z-index: 3000;
   pointer-events: none;
-  container-type: size;
   animation: fadeIn 0.12s ease-out;
 }
 
@@ -20,13 +19,12 @@
 .wheelContainer {
   position: relative;
   --target-size: min(var(--preferred-size, 300px), 340px);
-  --wheel-diameter: min(90cqw, 88cqh, var(--target-size));
+  --wheel-diameter: min(85vw, 85vh, var(--target-size));
   width: var(--wheel-diameter);
   height: var(--wheel-diameter);
   display: flex;
   align-items: center;
   justify-content: center;
-  container-type: size;
 }
 
 .wheelRing {
@@ -179,8 +177,10 @@
 @media (max-width: 640px) {
   .overlay {
     position: fixed;
-    z-index: 1600;
+    z-index: 3000;
     padding: 12px;
+    align-items: center;
+    justify-content: center;
   }
 
   .wheelContainer[data-size='normal'] { --target-size: 210px; }

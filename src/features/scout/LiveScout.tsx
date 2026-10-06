@@ -1027,8 +1027,6 @@ export function LiveScout() {
           {/* Controller HUD Feedback (Action Confirmation Flash & Video Seek HUD) */}
           <ControllerHudFeedback badge={controllerBadge} seekState={seekState} actionFlash={actionFlash} />
 
-          {/* Radial Overlay */}
-          {activeWheel && renderSelection()}
 
           {/* Transient Save / Undo Toast Notification */}
           {scout.lastFeedback && (
@@ -1226,6 +1224,9 @@ export function LiveScout() {
           </button>
         </div>
       </footer>
+
+      {/* Radial / Area Selection Overlay (Fixed Viewport Layer) */}
+      {activeWheel && renderSelection()}
 
       {/* Pause / Session Menu Modal */}
       {isPauseMenuOpen && (

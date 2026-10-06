@@ -1,4 +1,5 @@
-.liveContainer {
+.liveContainer,
+.surface {
   display: flex;
   flex-direction: column;
   height: 100dvh;
@@ -7,10 +8,12 @@
   color: var(--text-primary);
   overflow: hidden;
   user-select: none;
+  position: relative;
 }
 
 .focusMode .sidePanel,
-.focusMode .bottomBar { display:none; }
+.focusMode .bottomBar,
+.focusMode .footerBar { display:none !important; }
 .focusMode .topBar { position:absolute; z-index:25; top:0; right:0; left:0; height:0; padding:0; border:0; background:transparent; pointer-events:none; }
 .focusMode .topBar .brandGroup,
 .focusMode .topBar .scoreboard,
@@ -19,8 +22,8 @@
 .focusMode .controllerName { display:inline; font-size:.7rem; }
 .focusHudHidden .topBar { opacity:0; pointer-events:none; }
 .focusHudHidden[data-controller-connected="false"] .topBar { opacity:1; }
-.focusMode .mainGrid { display:block; min-height:0; }
-.focusMode .matchFocusArea { position:absolute; inset:0; display:block; padding:0; overflow:hidden; }
+.focusMode .mainGrid { display:block; min-height:0; height:100%; width:100%; position:relative; overflow:hidden; flex:1; }
+.focusMode .matchFocusArea { position:absolute; inset:0; display:flex; flex-direction:column; padding:0; overflow:hidden; width:100%; height:100%; background:#000; }
 .focusMode .matchFocusArea > * { flex-shrink:initial; }
 .focusMode .mapToolbar,
 .focusMode .matchFocusArea > :global([data-testid="court-map"]),
@@ -28,7 +31,7 @@
 .focusMode .focusScoreboard,
 .focusMode .focusCurrentEvent,
 .focusMode .focusExit,
-.focusMode .focusEmpty { position:absolute; z-index:30; }
+.focusMode .focusEmpty { position:absolute; z-index:50; }
 .focusScoreboard { top:16px; left:50%; display:flex; align-items:center; gap:10px; transform:translateX(-50%); padding:8px 14px; border:1px solid rgb(255 255 255 / 16%); border-radius:10px; color:#f2f6fa; background:rgb(4 8 12 / 82%); backdrop-filter:blur(10px); font-size:.85rem; }
 .focusScoreboard strong { font-size:1.3rem; font-variant-numeric:tabular-nums; }
 .focusTeam { display:flex; align-items:center; gap:6px; padding:3px 5px; border-radius:5px; }
@@ -507,18 +510,49 @@
 .evalNeu { color: var(--text-secondary); }
 .evalNeg { color: #FF3B30; }
 
-/* Bottom Status Bar */
+/* Bottom Status / Footer Bar */
+.footerBar,
 .bottomBar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
-  height: 38px;
+  padding: 0 16px;
+  height: 42px;
   background: var(--surface);
   border-top: 1px solid var(--border);
   font-size: 0.8rem;
   color: var(--text-secondary);
   flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.footerShortcuts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.shortcutItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.shortcutItem:hover {
+  background: rgba(41, 151, 255, 0.15);
+  border-color: rgba(41, 151, 255, 0.4);
+  color: #fff;
 }
 
 .bottomLeft, .bottomRight {

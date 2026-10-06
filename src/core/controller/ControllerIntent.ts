@@ -9,6 +9,7 @@ export type ControllerIntent =
   | { type: 'RADIAL_CANCEL'; category: RadialCategory }
   | { type: 'SELECT_TEAM_A' }
   | { type: 'SELECT_TEAM_B' }
+  | { type: 'TOGGLE_ACTIVE_TEAM' }
   | { type: 'QUICK_RESULT_POSITIVE' }
   | { type: 'QUICK_RESULT_NEUTRAL' }
   | { type: 'QUICK_RESULT_NEGATIVE' }

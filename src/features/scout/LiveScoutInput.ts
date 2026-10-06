@@ -28,6 +28,7 @@ export type LiveScoutIntentRoute =
   | 'QUICK_EDIT_OPEN_RADIAL_PLAYER'
   | 'SCOUT_SELECT_TEAM_A'
   | 'SCOUT_SELECT_TEAM_B'
+  | 'SCOUT_TOGGLE_TEAM'
   | 'SCOUT_RESULT_POSITIVE'
   | 'SCOUT_RESULT_NEUTRAL'
   | 'SCOUT_RESULT_NEGATIVE'
@@ -128,6 +129,7 @@ export function routeLiveScoutIntent(
     case 'OPEN_RADIAL': return RADIAL_OPEN_ROUTES[intent.category];
     case 'SELECT_TEAM_A': return 'SCOUT_SELECT_TEAM_A';
     case 'SELECT_TEAM_B': return 'SCOUT_SELECT_TEAM_B';
+    case 'TOGGLE_ACTIVE_TEAM': return 'SCOUT_TOGGLE_TEAM';
     case 'QUICK_RESULT_POSITIVE': return 'SCOUT_RESULT_POSITIVE';
     case 'QUICK_RESULT_NEUTRAL': return 'SCOUT_RESULT_NEUTRAL';
     case 'QUICK_RESULT_NEGATIVE': return 'SCOUT_RESULT_NEGATIVE';
@@ -136,6 +138,13 @@ export function routeLiveScoutIntent(
     case 'CLEAR_CURRENT_ACTION': return 'SCOUT_CLEAR_ACTION';
     case 'TOGGLE_VIDEO_PLAYBACK': return 'SCOUT_TOGGLE_VIDEO';
     case 'TOGGLE_FOCUS_MODE': return 'TOGGLE_FOCUS_MODE';
+    case 'VIDEO_ANALOG_SEEK':
+    case 'VIDEO_SEEK_STARTED':
+    case 'VIDEO_SEEK_ENDED':
+    case 'VIDEO_CONTROL_SEEK':
+    case 'VIDEO_CONTROL_TOGGLE':
+    case 'VIDEO_CONTROL_CYCLE_RATE':
+      return 'VIDEO_CONTROL_COMMAND';
     default: return 'IGNORE';
   }
 }

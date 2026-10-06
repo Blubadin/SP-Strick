@@ -279,11 +279,11 @@ describe('LiveScout Hold-to-Select State Machine and Stick Isolation', () => {
     expect(useScoutStore.getState().activeTeam).toBe('B');
   });
 
-  it('opens Player on hold L2: displays active court players; LS selects #7; release L2 commits player', async () => {
+  it('opens Player on hold L1: displays active court players; LS selects #7; release L1 commits player', async () => {
     renderLiveScout();
     const surface = screen.getByTestId('live-scout-surface');
 
-    startHoldSelector('LEFT_TRIGGER', 'PLAYER');
+    startHoldSelector('LEFT_BUMPER', 'PLAYER');
     expect(surface.getAttribute('data-wheel-open')).toBe('true');
     expect(document.querySelector('span[class*="categoryTitle"]')?.textContent).toBe('Player');
 
@@ -300,20 +300,20 @@ describe('LiveScout Hold-to-Select State Machine and Stick Isolation', () => {
     expect(surface.getAttribute('data-wheel-open')).toBe('true');
     expect(useScoutStore.getState().selectedPlayerId).toBeUndefined();
 
-    // Release L2 -> Commits player #7 (id 'p1')
-    releaseOpenerButton('LEFT_TRIGGER');
+    // Release L1 -> Commits player #7 (id 'p1')
+    releaseOpenerButton('LEFT_BUMPER');
     await act(async () => { await Promise.resolve(); });
 
     expect(surface.getAttribute('data-wheel-open')).toBe('false');
     expect(useScoutStore.getState().selectedPlayerId).toBe('p1');
   });
 
-  it('opens Player on hold L2 with empty roster: displays empty state and cancels on release', async () => {
+  it('opens Player on hold L1 with empty roster: displays empty state and cancels on release', async () => {
     useScoutStore.setState({ teamAPlayers: [] });
     renderLiveScout();
     const surface = screen.getByTestId('live-scout-surface');
 
-    startHoldSelector('LEFT_TRIGGER', 'PLAYER');
+    startHoldSelector('LEFT_BUMPER', 'PLAYER');
     expect(surface.getAttribute('data-wheel-open')).toBe('true');
     expect(screen.getByText('NO PLAYERS')).toBeTruthy();
 
@@ -321,12 +321,25 @@ describe('LiveScout Hold-to-Select State Machine and Stick Isolation', () => {
     updateControllerSticks({ x: 1, y: 0, magnitude: 1, angle: 0 }, neutralStick);
     expect(document.querySelector('span[class*="selectionPreview"]')).toBeNull();
 
-    // Release L2 -> Cancels cleanly
-    releaseOpenerButton('LEFT_TRIGGER');
+    // Release L1 -> Cancels cleanly
+    releaseOpenerButton('LEFT_BUMPER');
     await act(async () => { await Promise.resolve(); });
 
     expect(surface.getAttribute('data-wheel-open')).toBe('false');
     expect(useScoutStore.getState().selectedPlayerId).toBeUndefined();
+  });
+
+  it('toggles active team between A and B on TOGGLE_ACTIVE_TEAM (L2)', () => {
+    renderLiveScout();
+    expect(useScoutStore.getState().activeTeam).toBe('A');
+
+    // Press L2 -> toggles to Team B
+    act(() => intentDispatcher.dispatch({ type: 'TOGGLE_ACTIVE_TEAM' }));
+    expect(useScoutStore.getState().activeTeam).toBe('B');
+
+    // Press L2 again -> toggles back to Team A
+    act(() => intentDispatcher.dispatch({ type: 'TOGGLE_ACTIVE_TEAM' }));
+    expect(useScoutStore.getState().activeTeam).toBe('A');
   });
 
   it('ignores competing OPEN_RADIAL intents while a selector is already held', async () => {

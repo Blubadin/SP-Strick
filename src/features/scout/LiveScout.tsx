@@ -654,6 +654,14 @@ export function LiveScout() {
         triggerActionFlash(t('scout.team', 'TEAM'), (scout.teamB || t('team.b', 'Team B')).toUpperCase());
         break;
       }
+      case 'SCOUT_TOGGLE_TEAM': {
+        const next = scout.activeTeam === 'A' ? 'B' : 'A';
+        scout.setActiveTeam(next);
+        setInspectedEvent(null);
+        const name = next === 'A' ? (scout.teamA || t('team.a', 'Team A')) : (scout.teamB || t('team.b', 'Team B'));
+        triggerActionFlash(t('scout.team', 'TEAM'), name.toUpperCase());
+        break;
+      }
       case 'SCOUT_RESULT_POSITIVE': {
         void scout.updateCurrentEvent({ evaluation: 1 });
         triggerActionFlash(t('scout.result', 'RESULT'), '+1 POINT');
@@ -852,7 +860,7 @@ export function LiveScout() {
 
   const quickEditFields = [
     { index: 0, category: 'TEAM' as const, key: 'scout.team', fallback: 'Team', glyph: 'FACE_NORTH' as const, value: quickEditTeamName },
-    { index: 1, category: 'PLAYER' as const, key: 'scout.player', fallback: 'Player', glyph: 'LEFT_TRIGGER' as const, value: quickEditPlayer ? `#${quickEditPlayer.number}${quickEditPlayer.name ? ` ${quickEditPlayer.name}` : ''}` : '—' },
+    { index: 1, category: 'PLAYER' as const, key: 'scout.player', fallback: 'Player', glyph: 'LEFT_BUMPER' as const, value: quickEditPlayer ? `#${quickEditPlayer.number}${quickEditPlayer.name ? ` ${quickEditPlayer.name}` : ''}` : '—' },
     { index: 2, category: 'SKILL' as const, key: 'scout.skill', fallback: 'Skill', glyph: 'FACE_SOUTH' as const, value: quickEditChanges.skill ?? quickEditEvent?.skill },
     { index: 3, category: 'ZONE' as const, key: 'scout.zone', fallback: 'Zone', glyph: 'FACE_WEST' as const, value: quickEditChanges.originZone ?? quickEditEvent?.originZone },
     { index: 4, category: 'RESULT' as const, key: 'scout.result', fallback: 'Result', glyph: 'FACE_EAST' as const, value: quickEditChanges.evaluation ?? quickEditEvent?.evaluation }
@@ -870,7 +878,7 @@ export function LiveScout() {
       case 'ZONE': return t('scout.hint_zone', 'HOLD X · LS SELECT · RELEASE X CONFIRM');
       case 'RESULT': return t('scout.hint_result', 'HOLD B · LS TO SELECT · RELEASE B TO CONFIRM');
       case 'TEAM': return t('scout.hint_team', 'HOLD Y · LS TO SELECT · RELEASE Y TO CONFIRM');
-      case 'PLAYER': return t('scout.hint_player', 'HOLD L2 · LS TO SELECT · RELEASE L2 TO CONFIRM');
+      case 'PLAYER': return t('scout.hint_player', 'HOLD L1 · LS TO SELECT · RELEASE L1 TO CONFIRM');
     }
   };
 
@@ -1095,7 +1103,7 @@ export function LiveScout() {
                 <span className={styles.slotValue}>
                   {focusPlayer ? `#${focusPlayer.number}${focusPlayer.name ? ` ${focusPlayer.name}` : ''}` : '—'}
                 </span>
-                <ControllerGlyph control="LEFT_TRIGGER" className={styles.slotGlyph} />
+                <ControllerGlyph control="LEFT_BUMPER" className={styles.slotGlyph} />
               </button>
 
               {/* Skill Slot */}
@@ -1214,7 +1222,20 @@ export function LiveScout() {
             <ControllerGlyph control="FACE_NORTH" /> {t('scout.team', 'Team')}
           </button>
           <button type="button" className={styles.shortcutItem} onClick={() => setWheelOpen('PLAYER')}>
-            <ControllerGlyph control="LEFT_TRIGGER" /> {t('scout.player', 'Player')}
+            <ControllerGlyph control="LEFT_BUMPER" /> {t('scout.player', 'Player')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => {
+            const next = scout.activeTeam === 'A' ? 'B' : 'A';
+            scout.setActiveTeam(next);
+            setInspectedEvent(null);
+          }}>
+            <ControllerGlyph control="LEFT_TRIGGER" /> {t('scout.toggle_team', 'Team A/B')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => videoPlayback.togglePlayback()}>
+            <ControllerGlyph control="RIGHT_BUMPER" /> {t('video.play_pause', 'Play/Pause')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={toggleFocusMode}>
+            <ControllerGlyph control="VIEW" /> {t('scout.focus_hud', 'Focus HUD')}
           </button>
           <button type="button" className={styles.shortcutItem} onClick={() => setQuickEditOpen(true)}>
             <ControllerGlyph control="LEFT_STICK_BUTTON" /> {t('scout.edit_last_short', 'Edit Last')}

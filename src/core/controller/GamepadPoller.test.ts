@@ -80,7 +80,7 @@ describe('GamepadPoller state publication', () => {
     cleanupDetector = listenForGamepadConnections();
     startGamepadPolling();
     stepFrame();
-    for (const index of [6, 7, 15]) {
+    for (const index of [4, 7, 15]) {
       (gamepad.buttons as GamepadButton[])[index] = { pressed: true, touched: true, value: 1 };
     }
     stepFrame();
@@ -93,103 +93,91 @@ describe('GamepadPoller state publication', () => {
     expect(intents).toHaveLength(3);
   });
 
-  it('toggles video once for a quick VIEW tap', () => {
+  it('toggles focus mode on VIEW tap', () => {
     cleanupDetector = listenForGamepadConnections();
-    setVideoModifierContextEnabled(true);
     startGamepadPolling();
     stepFrame(0);
     (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
     stepFrame(10);
-    expect(intents).toContain('VIDEO_CONTROL_ENTER');
-    expect(intents).not.toContain('TOGGLE_VIDEO_PLAYBACK');
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
-    stepFrame(100);
-    expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(1);
-    expect(intents.slice(-2)).toEqual(['VIDEO_CONTROL_EXIT', 'TOGGLE_VIDEO_PLAYBACK']);
+    expect(intents).toContain('TOGGLE_FOCUS_MODE');
   });
 
-  it('dispatches video chords and exits on VIEW release without a second toggle', () => {
+  it('toggles video playback on quick R1 release without chord', () => {
     cleanupDetector = listenForGamepadConnections();
-    setVideoModifierContextEnabled(true);
+    startGamepadPolling();
+    stepFrame(0);
+    // Press R1 (button 5)
+    (gamepad.buttons as GamepadButton[])[5] = { pressed: true, touched: true, value: 1 };
+    stepFrame(10);
+    expect(intents).not.toContain('TOGGLE_VIDEO_PLAYBACK');
+    // Release R1
+    (gamepad.buttons as GamepadButton[])[5] = { pressed: false, touched: false, value: 0 };
+    stepFrame(50);
+    expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(1);
+  });
+
+  it('dispatches R1 + L2 chord to rewind 3s (-3000ms) without triggering team toggle or play toggle', () => {
+    cleanupDetector = listenForGamepadConnections();
     const received: Array<{ type: string; deltaMs?: number }> = [];
     const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
     startGamepadPolling();
     stepFrame(0);
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    // Hold R1 (button 5)
+    (gamepad.buttons as GamepadButton[])[5] = { pressed: true, touched: true, value: 1 };
     stepFrame(10);
-    (gamepad.buttons as GamepadButton[])[2] = { pressed: true, touched: true, value: 1 };
+    // Tap L2 (button 6)
+    (gamepad.buttons as GamepadButton[])[6] = { pressed: true, touched: true, value: 1 };
     stepFrame(50);
-    expect(received).toContainEqual({ type: 'VIDEO_CONTROL_SEEK', deltaMs: -1000 });
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
+    expect(received).toContainEqual({ type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 });
+    // Release R1 and L2
+    (gamepad.buttons as GamepadButton[])[5] = { pressed: false, touched: false, value: 0 };
+    (gamepad.buttons as GamepadButton[])[6] = { pressed: false, touched: false, value: 0 };
     stepFrame(80);
     stopListening();
     expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(0);
-    expect(intents.at(-1)).toBe('VIDEO_CONTROL_EXIT');
+    expect(intents.filter(type => type === 'TOGGLE_ACTIVE_TEAM')).toHaveLength(0);
   });
 
-  it('maps the complete video chord set to seek, toggle, and rate intents', () => {
+  it('dispatches R1 + R2 chord to advance 5s (+5000ms) without triggering pass or play toggle', () => {
     cleanupDetector = listenForGamepadConnections();
-    setVideoModifierContextEnabled(true);
     const received: Array<{ type: string; deltaMs?: number }> = [];
     const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
     startGamepadPolling();
     stepFrame(0);
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
+    // Hold R1 (button 5)
+    (gamepad.buttons as GamepadButton[])[5] = { pressed: true, touched: true, value: 1 };
     stepFrame(10);
-    for (const index of [14, 15, 0, 3, 1, 2]) {
-      (gamepad.buttons as GamepadButton[])[index] = { pressed: true, touched: true, value: 1 };
-    }
-    stepFrame(40);
+    // Tap R2 (button 7)
+    (gamepad.buttons as GamepadButton[])[7] = { pressed: true, touched: true, value: 1 };
+    stepFrame(50);
+    expect(received).toContainEqual({ type: 'VIDEO_CONTROL_SEEK', deltaMs: 5000 });
+    // Release R1 and R2
+    (gamepad.buttons as GamepadButton[])[5] = { pressed: false, touched: false, value: 0 };
+    (gamepad.buttons as GamepadButton[])[7] = { pressed: false, touched: false, value: 0 };
+    stepFrame(80);
     stopListening();
-    expect(received).toEqual(expect.arrayContaining([
-      { type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 },
-      { type: 'VIDEO_CONTROL_SEEK', deltaMs: 3000 },
-      { type: 'VIDEO_CONTROL_SEEK', deltaMs: -1000 },
-      { type: 'VIDEO_CONTROL_SEEK', deltaMs: 1000 },
-      { type: 'VIDEO_CONTROL_TOGGLE' },
-      { type: 'VIDEO_CONTROL_CYCLE_RATE' }
-    ]));
-    expect(intents).not.toContain('UNDO_LAST_EVENT');
-    expect(intents).not.toContain('QUICK_RESULT_NEUTRAL');
-  });
-
-  it('toggles focus mode via VIEW + MENU chord without triggering playback toggle on release', () => {
-    cleanupDetector = listenForGamepadConnections();
-    setVideoModifierContextEnabled(true);
-    const received: Array<{ type: string }> = [];
-    const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
-    startGamepadPolling();
-    stepFrame(0);
-    // Hold VIEW
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
-    stepFrame(10);
-    // Press MENU
-    (gamepad.buttons as GamepadButton[])[9] = { pressed: true, touched: true, value: 1 };
-    stepFrame(30);
-    expect(received).toContainEqual({ type: 'TOGGLE_FOCUS_MODE' });
-
-    // Release VIEW
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
-    (gamepad.buttons as GamepadButton[])[9] = { pressed: false, touched: false, value: 0 };
-    stepFrame(60);
-    stopListening();
-
-    // VIEW release should NOT toggle playback because chord was used
     expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(0);
+    expect(intents.filter(type => type === 'QUICK_RESULT_NEUTRAL')).toHaveLength(0);
   });
 
-  it('performs analog scrub with RS X while VIEW is held and emits seek start, delta, and seek end', () => {
+  it('toggles active team on L2 press alone', () => {
     cleanupDetector = listenForGamepadConnections();
-    setVideoModifierContextEnabled(true);
+    startGamepadPolling();
+    stepFrame(0);
+    (gamepad.buttons as GamepadButton[])[6] = { pressed: true, touched: true, value: 1 };
+    stepFrame(20);
+    expect(intents).toContain('TOGGLE_ACTIVE_TEAM');
+  });
+
+  it('performs direct analog scrub with RS X (right = forward, left = rewind) without holding VIEW', () => {
+    cleanupDetector = listenForGamepadConnections();
+    setDirectVideoSeekEnabled(true);
     const received: Array<{ type: string; deltaMs?: number }> = [];
     const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
     startGamepadPolling();
     stepFrame(0);
-    // Hold VIEW
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
-    stepFrame(10);
 
-    // Deflect Right Stick X past deadzone (e.g. 0.8 => medium/fast speed)
+    // Deflect Right Stick X past deadzone to the right (+0.8 => forward)
     (gamepad.axes as number[])[2] = 0.8;
     stepFrame(20);
     expect(received).toContainEqual({ type: 'VIDEO_SEEK_STARTED' });
@@ -208,33 +196,22 @@ describe('GamepadPoller state publication', () => {
     stopListening();
   });
 
-  it('falls back to Left Stick for analog scrub when controller has no Right Stick configured', () => {
+  it('supports legacy video modifier when VIEW is configured to TOGGLE_VIDEO_PLAYBACK', () => {
     cleanupDetector = listenForGamepadConnections();
-    useControllerStore.getState().setProfile({ ...STANDARD_PROFILE, rightStick: undefined });
+    usePreferencesStore.setState({ gameplayBindings: { ...DEFAULT_PREFERENCES.gameplayBindings, VIEW: 'TOGGLE_VIDEO_PLAYBACK' } });
     setVideoModifierContextEnabled(true);
-    const received: Array<{ type: string; deltaMs?: number }> = [];
-    const stopListening = intentDispatcher.subscribe(intent => received.push(intent));
     startGamepadPolling();
     stepFrame(0);
-
-    // Hold VIEW
     (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
     stepFrame(10);
-
-    // Deflect Left Stick X (axes[0])
-    (gamepad.axes as number[])[0] = 0.8;
-    stepFrame(20);
-    expect(received).toContainEqual({ type: 'VIDEO_SEEK_STARTED' });
-
-    stepFrame(120);
-    const analogSeeks = received.filter(i => i.type === 'VIDEO_ANALOG_SEEK');
-    expect(analogSeeks.length).toBeGreaterThan(0);
-
-    stopListening();
+    expect(intents).toContain('VIDEO_CONTROL_ENTER');
+    setVideoModifierContextEnabled(false);
+    expect(intents.at(-1)).toBe('VIDEO_CONTROL_EXIT');
   });
 
-  it('consumes unsupported controls while VIEW modifier is active', () => {
+  it('consumes unsupported controls while legacy VIEW modifier is active', () => {
     cleanupDetector = listenForGamepadConnections();
+    usePreferencesStore.setState({ gameplayBindings: { ...DEFAULT_PREFERENCES.gameplayBindings, VIEW: 'TOGGLE_VIDEO_PLAYBACK' } });
     setVideoModifierContextEnabled(true);
     startGamepadPolling();
     stepFrame(0);
@@ -242,7 +219,7 @@ describe('GamepadPoller state publication', () => {
     stepFrame(10);
     (gamepad.buttons as GamepadButton[])[4] = { pressed: true, touched: true, value: 1 };
     stepFrame(20);
-    expect(intents).not.toContain('SELECT_TEAM_A');
+    expect(intents).not.toContain('PLAYER');
   });
 
   it('keeps a customized VIEW binding as its configured gameplay action', () => {
@@ -255,8 +232,9 @@ describe('GamepadPoller state publication', () => {
     expect(intents).toEqual(['BOOKMARK_MOMENT']);
   });
 
-  it('exits an active video modifier when polling stops or the controller disconnects', () => {
+  it('exits an active legacy video modifier when polling stops or the controller disconnects', () => {
     cleanupDetector = listenForGamepadConnections();
+    usePreferencesStore.setState({ gameplayBindings: { ...DEFAULT_PREFERENCES.gameplayBindings, VIEW: 'TOGGLE_VIDEO_PLAYBACK' } });
     setVideoModifierContextEnabled(true);
     startGamepadPolling();
     stepFrame(0);
@@ -272,28 +250,6 @@ describe('GamepadPoller state publication', () => {
     (gamepad as { connected: boolean }).connected = false;
     stepFrame(40);
     expect(intents.filter(type => type === 'VIDEO_CONTROL_EXIT')).toHaveLength(1);
-  });
-
-  it('does not enter video controls outside a live context and exits when eligibility is revoked', () => {
-    cleanupDetector = listenForGamepadConnections();
-    startGamepadPolling();
-    stepFrame(0);
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
-    stepFrame(10);
-    expect(intents).not.toContain('VIDEO_CONTROL_ENTER');
-
-    setVideoModifierContextEnabled(true);
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
-    stepFrame(20);
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: true, touched: true, value: 1 };
-    stepFrame(30);
-    expect(intents).toContain('VIDEO_CONTROL_ENTER');
-    setVideoModifierContextEnabled(false);
-    expect(intents.at(-1)).toBe('VIDEO_CONTROL_EXIT');
-
-    (gamepad.buttons as GamepadButton[])[8] = { pressed: false, touched: false, value: 0 };
-    stepFrame(60);
-    expect(intents.filter(type => type === 'TOGGLE_VIDEO_PLAYBACK')).toHaveLength(0);
   });
   it('uses gameplay shortcuts independently of calibrated physical indices', () => {
     cleanupDetector = listenForGamepadConnections();

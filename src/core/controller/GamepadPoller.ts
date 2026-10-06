@@ -5,7 +5,7 @@ import { intentDispatcher, type ControllerIntent } from './ControllerIntent';
 import { hapticManager } from './HapticManager';
 import { rawGamepadSnapshotStore } from './RawGamepadSnapshot';
 import { usePreferencesStore } from '../preferences/PreferencesStore';
-import { DEFAULT_GAMEPLAY_BINDINGS, gameplayActionIntent } from './GameplayBindings';
+import { gameplayActionIntent } from './GameplayBindings';
 import type { AxisState, SemanticControl } from './ControllerTypes';
 
 let pollingFrame: number | null = null;
@@ -21,6 +21,7 @@ let directVideoSeekEnabled = false;
 let analogSeeking = false;
 let lastAnalogSeekTimestamp = 0;
 let accumulatedAnalogDeltaMs = 0;
+let r1ChordUsed = false;
 
 const VIDEO_CONTROL_INTENTS: Partial<Record<SemanticControl, ControllerIntent>> = {
   DPAD_LEFT: { type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 },
@@ -117,9 +118,9 @@ export function startGamepadPolling(): void {
         }
 
         const bindings = usePreferencesStore.getState().gameplayBindings;
-        const defaultViewBinding = bindings.VIEW === DEFAULT_GAMEPLAY_BINDINGS.VIEW;
+        const enableLegacyViewModifier = bindings.VIEW === 'TOGGLE_VIDEO_PLAYBACK';
         const viewButton = buttons.VIEW;
-        if (defaultViewBinding && videoModifierContextEnabled && !videoModifierActive && viewButton.pressedThisFrame) {
+        if (enableLegacyViewModifier && videoModifierContextEnabled && !videoModifierActive && viewButton.pressedThisFrame) {
           videoModifierActive = true;
           videoModifierStartedAt = timestamp;
           videoModifierChordUsed = false;
@@ -224,14 +225,44 @@ export function startGamepadPolling(): void {
           }
         }
 
+        // R1 (RIGHT_BUMPER) transport controls and chords:
+        // Hold R1 + L2 = rewind 3s (-3000ms); Hold R1 + R2 = forward 5s (+5000ms); Tap R1 alone = play/pause
+        const r1Button = buttons.RIGHT_BUMPER;
+        const l2Button = buttons.LEFT_TRIGGER;
+        const r2Button = buttons.RIGHT_TRIGGER;
+        const isR1PlaybackBinding = bindings.RIGHT_BUMPER === 'TOGGLE_VIDEO_PLAYBACK';
+
+        if (isR1PlaybackBinding && r1Button.pressed) {
+          if (l2Button.pressedThisFrame) {
+            r1ChordUsed = true;
+            hapticManager.tick(gp);
+            intentDispatcher.dispatch({ type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 });
+          }
+          if (r2Button.pressedThisFrame) {
+            r1ChordUsed = true;
+            hapticManager.tick(gp);
+            intentDispatcher.dispatch({ type: 'VIDEO_CONTROL_SEEK', deltaMs: 5000 });
+          }
+        }
+
+        if (isR1PlaybackBinding && r1Button.releasedThisFrame) {
+          if (!r1ChordUsed) {
+            intentDispatcher.dispatch({ type: 'TOGGLE_VIDEO_PLAYBACK' });
+          }
+          r1ChordUsed = false;
+        }
+
         // Gameplay assignments use semantic controls; physical calibration remains in the profile.
         for (const control of ALL_SEMANTIC_CONTROLS) {
           if (!buttons[control].pressedThisFrame || (consumeAsVideoModifier && control !== 'VIEW')) continue;
-          if (control === 'VIEW' && defaultViewBinding) continue;
+          if (control === 'VIEW' && videoModifierActive) continue;
+          if (isR1PlaybackBinding && control === 'RIGHT_BUMPER') continue;
+          if (isR1PlaybackBinding && r1Button.pressed && (control === 'LEFT_TRIGGER' || control === 'RIGHT_TRIGGER')) continue;
+
           const actionIntent = gameplayActionIntent(bindings[control]);
           const intent = actionIntent.type === 'OPEN_RADIAL' ? { ...actionIntent, control } : actionIntent;
           if (intent.type === 'UNDO_LAST_EVENT') hapticManager.warning(gp);
-          else if (intent.type === 'SELECT_TEAM_A' || intent.type === 'SELECT_TEAM_B' || intent.type === 'BOOKMARK_MOMENT') hapticManager.tick(gp);
+          else if (intent.type === 'SELECT_TEAM_A' || intent.type === 'SELECT_TEAM_B' || intent.type === 'TOGGLE_ACTIVE_TEAM' || intent.type === 'BOOKMARK_MOMENT') hapticManager.tick(gp);
           intentDispatcher.dispatch(intent);
         }
       } else {
@@ -256,6 +287,7 @@ export function stopGamepadPolling(): void {
 
 /** Resets poller internal button history and exits any active video modifier / seeking. */
 export function resetPollerState(): void {
+  r1ChordUsed = false;
   if (analogSeeking) {
     analogSeeking = false;
     lastAnalogSeekTimestamp = 0;

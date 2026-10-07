@@ -519,7 +519,7 @@ export default function ControllerPage() {
     const active = pressed(control);
     return <g key={control} role="button" tabIndex={0} aria-label={`${controlLabel(control, t)} · ${label}`} aria-pressed={selected} className={`${styles.svgControl} ${active ? styles.svgPressed : ''} ${selected ? styles.svgSelected : ''}`} transform={shape === 'rect' ? `translate(${x - 25} ${y - 11})` : `translate(${x} ${y})`} onClick={() => { setSelectedControl(control); setSection('mapping'); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedControl(control); setSection('mapping'); } }}>
       {shape === 'rect' ? <rect width="50" height="22" rx="7" /> : <circle r="13" />}
-      <text textAnchor="middle" dominantBaseline="central">{label}</text>
+      <text x={shape === 'rect' ? 25 : 0} y={shape === 'rect' ? 11 : 0} textAnchor="middle" dominantBaseline="central">{label}</text>
     </g>;
   };
 
@@ -547,8 +547,8 @@ export default function ControllerPage() {
             {section === 'overview' && <>
               <div className={styles.panelTitle}><div><p className={styles.eyebrow}>{t('controller.live_input', 'LIVE INPUT')}</p><h2>{t('controller.controller_test', 'Controller test')}</h2></div><span className={controllerState.connected ? styles.onlineTag : styles.offlineTag}>{controllerState.connected ? t('controller.online', 'CONNECTED') : t('controller.waiting', 'WAITING')}</span></div>
               <div className={styles.controllerStage}>
-                <svg viewBox="0 0 640 300" role="group" aria-label={t('controller.diagram_label', 'Interactive controller diagram. Select a control to inspect its mapping.')} className={styles.diagram}>
-                  <path className={styles.controllerBody} d="M151 69C164 31 201 20 249 43c24 12 47 17 71 17s47-5 71-17c48-23 85-12 98 26l35 106c13 40-12 59-39 40l-54-39c-20-14-39-20-61-20H231c-22 0-41 6-61 20l-54 39c-27 19-52 0-39-40z" />
+                <svg viewBox="60 15 520 270" role="group" aria-label={t('controller.diagram_label', 'Interactive controller diagram. Select a control to inspect its mapping.')} className={styles.diagram}>
+                  <path className={styles.controllerBody} d="M148 64C163 38 199 30 240 45Q320 80 400 45C441 30 477 38 492 64L531 194C541 231 510 250 488 231L428 181Q416 171 399 171H241Q224 171 212 181L152 231C130 250 99 231 109 194Z" />
                   <path className={styles.gripLine} d="M134 100c-8 35-19 73-26 94M506 100c8 35 19 73 26 94" />
                   <circle className={styles.stickBase} cx="266" cy="168" r="30" /><circle className={styles.stickBase} cx="374" cy="168" r="30" />
                   <circle role="button" tabIndex={0} aria-label={controlLabel('LEFT_STICK_BUTTON', t)} aria-pressed={selectedControl === 'LEFT_STICK_BUTTON'} className={`${styles.stickButton} ${selectedControl === 'LEFT_STICK_BUTTON' ? styles.svgSelected : ''} ${pressed('LEFT_STICK_BUTTON') ? styles.stickPressed : ''}`} cx="266" cy="168" r="22" onClick={() => { setSelectedControl('LEFT_STICK_BUTTON'); setSection('mapping'); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedControl('LEFT_STICK_BUTTON'); setSection('mapping'); } }} />

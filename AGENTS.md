@@ -19,6 +19,8 @@ The Gamepad Controller interaction architecture, button mappings, video transpor
 - **View Button**: Toggle Focus Mode / HUD Mode on/off.
 - **ML (Macro Left / Rear Paddle Left)**: Toggle Rally & Sequence History drawer in Focus/HUD mode (`TOGGLE_RALLY_HISTORY`).
 - **MR (Macro Right / Rear Paddle Right)**: Clear current draft scouting action (`CLEAR_CURRENT_ACTION`).
+- **Y + R1**: Clear current draft scouting action. Hold Y then press R1; suppress Team selection and Play/Pause for this chord.
+- **Y + R2**: Toggle Rally & Sequence History in HUD. Hold Y then press R2; suppress Team selection and the individual R2 action for this chord.
 - **Video Skip Chords**:
   - `R1 + L2`: Rewind 3 seconds (-3000ms).
   - `R1 + R2`: Forward 5 seconds (+5000ms).

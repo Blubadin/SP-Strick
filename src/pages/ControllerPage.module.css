@@ -32,19 +32,19 @@
 .onlineTag, .offlineTag, .mappingCount { padding: 5px 8px; border: 1px solid var(--border-subtle); border-radius: 5px; color: var(--text-secondary); font-size: .62rem; font-weight: 700; letter-spacing: .07em; }
 .onlineTag { border-color: color-mix(in srgb, var(--success) 35%, transparent); background: color-mix(in srgb, var(--success) 9%, transparent); color: var(--success); }
 .offlineTag { color: var(--text-tertiary); }
-.controllerStage { padding: 16px 16px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: radial-gradient(ellipse at 50% 60%, rgba(41, 151, 255, .045), transparent 65%), var(--bg-1); }
+.controllerStage { padding: 24px 18px 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: radial-gradient(ellipse at 50% 45%, rgba(41, 151, 255, .07), transparent 70%), var(--bg-1); }
 .diagram { display: block; width: min(100%, 720px); max-height: 340px; margin: 0 auto; overflow: visible; }
-.controllerBody { fill: #222831; stroke: #3b444f; stroke-width: 2; }
+.controllerBody { fill: #252d38; stroke: #566479; stroke-width: 1.5; filter: drop-shadow(0 10px 12px rgba(0, 0, 0, .3)); }
 .gripLine { fill: none; stroke: #404954; stroke-width: 2; stroke-linecap: round; }
-.stickBase { fill: #15191f; stroke: #3b444f; stroke-width: 2; }
+.stickBase { fill: #0e141c; stroke: #536174; stroke-width: 2; }
 .stickButton { fill: #2b323b; stroke: #596575; stroke-width: 1.5; cursor: pointer; }
 .stickButton:hover, .stickButton:focus { stroke: var(--accent); outline: none; }
 .stickPressed { fill: var(--accent); stroke: #79bdff; }
 .stickDot { fill: #e7edf5; stroke: #11161c; stroke-width: 1; pointer-events: none; }
-.stickLabel { fill: #76808d; font-size: 10px; font-weight: 700; pointer-events: none; }
+.stickLabel { fill: #a2afc0; font-size: 11px; font-weight: 600; letter-spacing: 1px; pointer-events: none; }
 .svgControl { cursor: pointer; outline: none; }
-.svgControl circle, .svgControl rect { fill: #303741; stroke: #545f6c; stroke-width: 1.4; transition: fill 120ms ease, transform 120ms ease; }
-.svgControl text { fill: #c7ced8; font-size: 9px; font-weight: 700; pointer-events: none; }
+.svgControl circle, .svgControl rect { fill: #18202c; stroke: #66778d; stroke-width: 1.4; transition: fill 120ms ease, stroke 120ms ease; }
+.svgControl text { fill: #e2eaf5; font-size: 11px; font-weight: 700; pointer-events: none; }
 .svgControl:hover circle, .svgControl:hover rect, .svgControl:focus circle, .svgControl:focus rect { stroke: var(--accent); stroke-width: 2; }
 .svgPressed circle, .svgPressed rect { fill: var(--accent); stroke: #77bcff; }
 .svgSelected circle, .svgSelected rect { stroke: #91cbff; stroke-width: 2.2; }

@@ -243,5 +243,21 @@ describe('LiveScout focus mode', () => {
     expect(useScoutStore.getState().currentEvent.originZone).toBeUndefined();
     expect(useScoutStore.getState().currentEvent.evaluation).toBeUndefined();
   });
+
+  it('cancels the held Y selector before opening HUD history without changing team', () => {
+    useControllerStore.setState((state) => ({ state: { ...state.state, connected: true } }));
+    renderLiveScout();
+    const teamBefore = useScoutStore.getState().activeTeam;
+    act(() => intentDispatcher.dispatch({ type: 'TOGGLE_FOCUS_MODE' }));
+    act(() => intentDispatcher.dispatch({ type: 'OPEN_RADIAL', category: 'TEAM', control: 'FACE_NORTH' }));
+    act(() => {
+      intentDispatcher.dispatch({ type: 'RADIAL_CANCEL', category: 'TEAM' });
+      intentDispatcher.dispatch({ type: 'TOGGLE_RALLY_HISTORY' });
+    });
+    expect(screen.getByRole('dialog', { name: 'Rallies & Sequences' })).toBeTruthy();
+    expect(useScoutStore.getState().activeTeam).toBe(teamBefore);
+    act(() => intentDispatcher.dispatch({ type: 'TOGGLE_RALLY_HISTORY' }));
+    expect(screen.queryByRole('dialog', { name: 'Rallies & Sequences' })).toBeNull();
+  });
 });
 

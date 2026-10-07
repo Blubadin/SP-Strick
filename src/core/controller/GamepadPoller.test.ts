@@ -102,6 +102,32 @@ describe('GamepadPoller state publication', () => {
     expect(intents).toContain('TOGGLE_FOCUS_MODE');
   });
 
+  for (const [index, action] of [[5, 'CLEAR_CURRENT_ACTION'], [7, 'TOGGLE_RALLY_HISTORY']] as const) {
+    for (const simultaneous of [false, true]) {
+      it(`Y + button ${index} dispatches ${action} once and consumes component actions (${simultaneous})`, () => {
+        cleanupDetector = listenForGamepadConnections();
+        startGamepadPolling();
+        stepFrame();
+        (gamepad.buttons as GamepadButton[])[3] = { pressed: true, touched: true, value: 1 };
+        if (!simultaneous) stepFrame(10);
+        (gamepad.buttons as GamepadButton[])[index] = { pressed: true, touched: true, value: 1 };
+        stepFrame(20);
+        stepFrame(30);
+        // Release Y first while the partner stays held.
+        (gamepad.buttons as GamepadButton[])[3] = { pressed: false, touched: false, value: 0 };
+        stepFrame(40);
+        (gamepad.buttons as GamepadButton[])[index] = { pressed: false, touched: false, value: 0 };
+        stepFrame(50);
+        expect(intents.filter(type => type === action)).toHaveLength(1);
+        expect(intents).toContain('RADIAL_CANCEL');
+        expect(intents).not.toContain('TOGGLE_VIDEO_PLAYBACK');
+        expect(intents).not.toContain('VIDEO_CONTROL_SEEK');
+        expect(intents).not.toContain('QUICK_RESULT_NEUTRAL');
+        expect(intents.filter(type => type === 'OPEN_RADIAL')).toHaveLength(simultaneous ? 0 : 1);
+      });
+    }
+  }
+
   it('toggles video playback on quick R1 release without chord', () => {
     cleanupDetector = listenForGamepadConnections();
     startGamepadPolling();

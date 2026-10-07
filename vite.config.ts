@@ -14,12 +14,16 @@ export default defineConfig({
         'branding/pwa-maskable-512.png'
       ],
       manifest: {
+        id: '/',
+        start_url: '/',
+        scope: '/',
         name: 'SP Stick',
         short_name: 'SP Stick',
         description: 'Controller-first sports scouting application',
         theme_color: '#0B0D10',
         background_color: '#0B0D10',
         display: 'standalone',
+        prefer_related_applications: false,
         icons: [
           {
             src: 'branding/pwa-192.png',

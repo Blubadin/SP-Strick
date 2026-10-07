@@ -654,6 +654,11 @@ export function LiveScout() {
 
   const handleIntent = useCallback((intent: ControllerIntent) => {
     revealFocusHud();
+    if (intent.type === 'RADIAL_CANCEL' && intent.category === 'TEAM' && activeWheelRef.current === 'TEAM' && contextRef.current === 'RADIAL') {
+      selectorEngineRef.current?.cancel();
+      setWheelOpen(null);
+      return;
+    }
     const route = routeLiveScoutIntent(contextRef.current, intent);
     switch (route) {
       case 'OPEN_PAUSE_MENU':

@@ -22,6 +22,8 @@ let analogSeeking = false;
 let lastAnalogSeekTimestamp = 0;
 let accumulatedAnalogDeltaMs = 0;
 let r1ChordUsed = false;
+let yChordUsed = false;
+let yR2Consumed = false;
 
 const VIDEO_CONTROL_INTENTS: Partial<Record<SemanticControl, ControllerIntent>> = {
   DPAD_LEFT: { type: 'VIDEO_CONTROL_SEEK', deltaMs: -3000 },
@@ -112,6 +114,26 @@ export function startGamepadPolling(): void {
         const rightStickChanged = stickSignificantlyChanged(rightStick, lastRightStick);
         if (leftStickChanged) lastLeftStick = leftStick;
         if (rightStickChanged) lastRightStick = rightStick;
+
+        // Y is a scouting shortcut modifier. Cancel its Team selector before
+        // publishing release edges so a chord cannot commit a highlighted team.
+        const yButton = buttons.FACE_NORTH;
+        const yR1 = yButton.pressed && buttons.RIGHT_BUMPER.pressed;
+        const yR2 = yButton.pressed && buttons.RIGHT_TRIGGER.pressed;
+        const newYChord = !videoModifierActive && !yChordUsed && (yR1 || yR2);
+        if (newYChord) {
+          yChordUsed = true;
+          if (yR1) r1ChordUsed = true;
+          if (yR2) yR2Consumed = true;
+          intentDispatcher.dispatch({ type: 'RADIAL_CANCEL', category: 'TEAM' });
+          intentDispatcher.dispatch({ type: yR1 ? 'CLEAR_CURRENT_ACTION' : 'TOGGLE_RALLY_HISTORY' });
+          hapticManager.tick(gp);
+        }
+        if (yChordUsed && buttons.RIGHT_BUMPER.pressed) r1ChordUsed = true;
+        const consumeY = yChordUsed;
+        const consumeR2 = yR2Consumed;
+        if (!yButton.pressed && !buttons.RIGHT_BUMPER.pressed && !buttons.RIGHT_TRIGGER.pressed) yChordUsed = false;
+        if (!buttons.RIGHT_TRIGGER.pressed) yR2Consumed = false;
 
         if (buttonsChanged || leftStickChanged || rightStickChanged || hasButtonFrameEdges(state.buttons)) {
           updateState({ buttons, leftStick, rightStick });
@@ -232,7 +254,7 @@ export function startGamepadPolling(): void {
         const r2Button = buttons.RIGHT_TRIGGER;
         const isR1PlaybackBinding = bindings.RIGHT_BUMPER === 'TOGGLE_VIDEO_PLAYBACK';
 
-        if (isR1PlaybackBinding && r1Button.pressed) {
+        if (isR1PlaybackBinding && r1Button.pressed && !consumeY) {
           if (l2Button.pressedThisFrame) {
             r1ChordUsed = true;
             hapticManager.tick(gp);
@@ -255,6 +277,8 @@ export function startGamepadPolling(): void {
         // Gameplay assignments use semantic controls; physical calibration remains in the profile.
         for (const control of ALL_SEMANTIC_CONTROLS) {
           if (!buttons[control].pressedThisFrame || (consumeAsVideoModifier && control !== 'VIEW')) continue;
+          if (consumeY && (control === 'FACE_NORTH' || control === 'RIGHT_BUMPER' || control === 'RIGHT_TRIGGER')) continue;
+          if (consumeR2 && control === 'RIGHT_TRIGGER') continue;
           if (control === 'VIEW' && videoModifierActive) continue;
           if (isR1PlaybackBinding && control === 'RIGHT_BUMPER') continue;
           if (isR1PlaybackBinding && r1Button.pressed && (control === 'LEFT_TRIGGER' || control === 'RIGHT_TRIGGER')) continue;
@@ -288,6 +312,8 @@ export function stopGamepadPolling(): void {
 /** Resets poller internal button history and exits any active video modifier / seeking. */
 export function resetPollerState(): void {
   r1ChordUsed = false;
+  yChordUsed = false;
+  yR2Consumed = false;
   if (analogSeeking) {
     analogSeeking = false;
     lastAnalogSeekTimestamp = 0;

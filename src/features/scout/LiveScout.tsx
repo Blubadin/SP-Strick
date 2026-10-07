@@ -435,20 +435,47 @@ export function LiveScout() {
   }, [focusMode, videoPlaying, hudHidden, hudRallyDrawerOpen, scheduleFocusHudHide, clearFocusHudTimer]);
 
   useEffect(() => {
-    if (!focusMode) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
       if (event.key === 'Escape') {
         if (hudRallyDrawerOpen) {
           setHudRallyDrawerOpen(false);
           return;
         }
-        setFocusMode(false);
-        setHudHidden(false);
+        if (focusMode) {
+          setFocusMode(false);
+          setHudHidden(false);
+        }
+        return;
+      }
+
+      // Keyboard shortcuts for ML (Rallies) and MR (Clear)
+      if (event.key === '[' || event.key === 'h' || event.key === 'H' || event.key === 'r' || event.key === 'R') {
+        setHudRallyDrawerOpen((prev) => {
+          const next = !prev;
+          triggerActionFlash(
+            t('scout.hud_rally_history', 'RALLIES'),
+            next ? t('scout.opened', 'OPENED') : t('scout.closed', 'CLOSED')
+          );
+          return next;
+        });
+        return;
+      }
+
+      if (event.key === ']' || event.key === 'c' || event.key === 'C' || event.key === 'Backspace' || event.key === 'Delete') {
+        void useScoutStore.getState().clearCurrentEvent();
+        setInspectedEvent(null);
+        triggerActionFlash(t('scout.action', 'ACTION'), t('scout.cleared', 'CLEARED'));
+        return;
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [focusMode, hudRallyDrawerOpen]);
+  }, [focusMode, hudRallyDrawerOpen, triggerActionFlash, t]);
 
   const revealFocusHud = useCallback(() => {
     if (!focusMode) return;

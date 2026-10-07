@@ -189,6 +189,83 @@
   .bottomStrip { grid-template-columns: 1fr; }
   .bottomStrip > div { justify-content: flex-start; }
 }
+
+.revolverHelperCard {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-1));
+  display: grid;
+  gap: 10px;
+}
+.revolverHelperHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.revolverIcon {
+  color: var(--accent);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.revolverHelperHeader strong {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.revolverHelperHeader p {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.revolverStepsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.revolverStepItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--surface-0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+.stepBadge {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+.revolverPresetBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+  width: fit-content;
+}
+.revolverPresetBtn:hover {
+  opacity: 0.9;
+}
+
 @media (max-width: 900px) {
   .page { gap: 12px; }
   .hero { align-items: flex-start; flex-direction: column; gap: 12px; }

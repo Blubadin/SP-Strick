@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
   Activity, AudioLines, Check, ChevronRight, CircleHelp, Download, Gamepad2,
-  RotateCcw, Save, SlidersHorizontal, Trash2, Upload, Vibrate, X
+  RotateCcw, Save, SlidersHorizontal, Sparkles, Trash2, Upload, Vibrate, X
 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { ControllerGlyph } from '../components/ControllerGlyph';
@@ -439,6 +439,44 @@ export default function ControllerPage() {
     catch { deleteCustomProfile(copy.id); setCaptureMessage(t('controller.profile_save_error', 'Could not save profile changes.')); }
   };
 
+  const applyRevolverPreset = async () => {
+    const now = nowIso();
+    const sourceProfile = useControllerStore.getState().profile;
+    const buttons: Partial<Record<SemanticControl, number>> = {
+      ...cloneProfile(sourceProfile).buttons,
+      PADDLE_LEFT: 12,
+      PADDLE_RIGHT: 13
+    };
+    delete buttons.DPAD_UP;
+    delete buttons.DPAD_DOWN;
+
+    const created: ControllerProfile = {
+      ...cloneProfile(sourceProfile),
+      id: `custom_${crypto.randomUUID()}`,
+      name: `Fantech Revolver III (${t('controller.paddle_preset_name', 'Paddles')})`,
+      type: 'custom',
+      buttons,
+      builtIn: false,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    if (!useControllerStore.getState().addCustomProfile(created)) {
+      setCaptureMessage(t('controller.profile_create_error', 'Could not create a profile. Check that each captured input is unique.'));
+      return;
+    }
+    try {
+      await db.customProfiles.put(created);
+      useControllerStore.getState().setProfile(created);
+      await usePreferencesStore.getState().setPreference('activeControllerProfileId', created.id);
+      updateDraft(cloneProfile(created));
+      setSavedMessage(t('controller.revolver_preset_applied', 'Revolver III profile activated: ML is now D-Pad Up (12), MR is now D-Pad Down (13).'));
+    } catch {
+      useControllerStore.getState().deleteCustomProfile(created.id);
+      setCaptureMessage(t('controller.profile_create_error', 'Could not save the custom profile.'));
+    }
+  };
+
   const deleteProfile = async () => {
     if (profile.builtIn) return;
     const current = profile;
@@ -528,6 +566,34 @@ export default function ControllerPage() {
                 <StickMeter label={t('controller.left_stick', 'Left stick')} rawX={leftRawX} rawY={leftRawY} x={controllerState.leftStick.x} y={controllerState.leftStick.y} deadzone={draft.leftStick.deadzone} />
                 <StickMeter label={t('controller.right_stick', 'Right stick')} rawX={rightRawX} rawY={rightRawY} x={controllerState.rightStick.x} y={controllerState.rightStick.y} deadzone={rightConfig.deadzone} />
               </div>
+              <div className={styles.revolverHelperCard}>
+                <div className={styles.revolverHelperHeader}>
+                  <Gamepad2 size={18} className={styles.revolverIcon} />
+                  <div>
+                    <strong>{t('controller.revolver_card_title', 'Fantech Revolver III (WGP12S) — Rear Paddles Setup')}</strong>
+                    <p>{t('controller.revolver_card_desc', 'Rear paddles ML & MR are unmapped by default on the controller hardware. Assign them to D-Pad Up & Down in 2 steps:')}</p>
+                  </div>
+                </div>
+                <div className={styles.revolverStepsGrid}>
+                  <div className={styles.revolverStepItem}>
+                    <span className={styles.stepBadge}>ML</span>
+                    <span>{t('controller.revolver_ml_instruction', 'Hold Fx + ML (2s, LED turns on) → Press ↑ (D-Pad Up) → Press ML to finish')}</span>
+                  </div>
+                  <div className={styles.revolverStepItem}>
+                    <span className={styles.stepBadge}>MR</span>
+                    <span>{t('controller.revolver_mr_instruction', 'Hold Fx + MR (2s, LED turns on) → Press ↓ (D-Pad Down) → Press MR to finish')}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={styles.revolverPresetBtn}
+                  onClick={() => void applyRevolverPreset()}
+                >
+                  <Sparkles size={14} />
+                  {t('controller.apply_revolver_preset', 'Apply Revolver III Preset (ML = ↑, MR = ↓)')}
+                </button>
+              </div>
+
               <button type="button" className={styles.textAction} onClick={() => setSection('mapping')}>{t('controller.open_mapping', 'Review button mapping')}<ChevronRight size={16} /></button>
             </>}
 

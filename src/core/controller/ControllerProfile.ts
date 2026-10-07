@@ -130,7 +130,7 @@ export const WGP12S_PROFILE: ControllerProfile = immutableProfile({
   ...STANDARD_PROFILE,
   id: 'profile_wgp12s',
   name: 'WGP12S compatible',
-  detectedIdPatterns: ['wgp12s']
+  detectedIdPatterns: ['wgp12s', 'revolver']
 });
 
 export const BUILT_IN_PROFILES: ControllerProfile[] = Object.freeze([WGP12S_PROFILE]) as unknown as ControllerProfile[];

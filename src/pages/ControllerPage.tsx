@@ -34,7 +34,8 @@ const controlNames: Record<SemanticControl, string> = {
   LEFT_STICK_BUTTON: 'controller.left_stick_button', RIGHT_STICK_BUTTON: 'controller.right_stick_button',
   DPAD_UP: 'controller.dpad_up', DPAD_RIGHT: 'controller.dpad_right',
   DPAD_DOWN: 'controller.dpad_down', DPAD_LEFT: 'controller.dpad_left',
-  MENU: 'controller.menu', VIEW: 'controller.view'
+  MENU: 'controller.menu', VIEW: 'controller.view',
+  PADDLE_LEFT: 'controller.paddle_left', PADDLE_RIGHT: 'controller.paddle_right'
 };
 
 const sections: { id: ControllerSection; key: string; icon: typeof Gamepad2 }[] = [
@@ -470,7 +471,9 @@ export default function ControllerPage() {
     { control: 'FACE_NORTH', x: 444, y: 150, label: getControllerGlyph('FACE_NORTH', profile.type) },
     { control: 'FACE_EAST', x: 466, y: 180, label: getControllerGlyph('FACE_EAST', profile.type) },
     { control: 'FACE_SOUTH', x: 444, y: 210, label: getControllerGlyph('FACE_SOUTH', profile.type) },
-    { control: 'FACE_WEST', x: 422, y: 180, label: getControllerGlyph('FACE_WEST', profile.type) }
+    { control: 'FACE_WEST', x: 422, y: 180, label: getControllerGlyph('FACE_WEST', profile.type) },
+    { control: 'PADDLE_LEFT', x: 230, y: 250, label: getControllerGlyph('PADDLE_LEFT', profile.type), shape: 'rect' },
+    { control: 'PADDLE_RIGHT', x: 410, y: 250, label: getControllerGlyph('PADDLE_RIGHT', profile.type), shape: 'rect' }
   ];
 
   const controlElement = (control: SemanticControl, x: number, y: number, label: string, shape?: 'rect') => {

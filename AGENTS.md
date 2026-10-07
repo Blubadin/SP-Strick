@@ -17,6 +17,8 @@ The Gamepad Controller interaction architecture, button mappings, video transpor
 - **L2 (Left Trigger)**: Active Team Toggle (swaps between Team A and Team B with audio/visual flash).
 - **L1 (Left Bumper)**: Player Wheel (Hold L1 + LS to pick player, release L1 to commit).
 - **View Button**: Toggle Focus Mode / HUD Mode on/off.
+- **ML (Macro Left / Rear Paddle Left)**: Toggle Rally & Sequence History drawer in Focus/HUD mode (`TOGGLE_RALLY_HISTORY`).
+- **MR (Macro Right / Rear Paddle Right)**: Clear current draft scouting action (`CLEAR_CURRENT_ACTION`).
 - **Video Skip Chords**:
   - `R1 + L2`: Rewind 3 seconds (-3000ms).
   - `R1 + R2`: Forward 5 seconds (+5000ms).

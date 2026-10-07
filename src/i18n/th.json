@@ -480,5 +480,16 @@
   "controller.gameplay.TOGGLE_VIDEO_PLAYBACK": "เล่น / หยุดวิดีโอ",
   "controller.gameplay.PAUSE_SESSION": "หยุดการแข่งขันชั่วคราว",
   "controller.gameplay.EDIT_LAST_EVENT": "แก้ไข action ล่าสุด",
-  "controller.gameplay.BOOKMARK_MOMENT": "บันทึกช่วงเวลา"
+  "controller.gameplay.BOOKMARK_MOMENT": "บันทึกช่วงเวลา",
+  "controller.gameplay.TOGGLE_RALLY_HISTORY": "ประวัติแรลลี่ (HUD)",
+  "controller.paddle_left": "ML (ปุ่มหลังซ้าย)",
+  "controller.paddle_right": "MR (ปุ่มหลังขวา)",
+  "scout.cleared": "ล้างแล้ว",
+  "scout.action": "แอ็กชัน",
+  "scout.hud_rally_history": "ประวัติแรลลี่และซีเควนซ์",
+  "scout.rallies_short": "แรลลี่",
+  "scout.clear_short": "ล้างค่า",
+  "scout.close": "ปิด",
+  "scout.opened": "เปิดแล้ว",
+  "scout.closed": "ปิดแล้ว"
 }

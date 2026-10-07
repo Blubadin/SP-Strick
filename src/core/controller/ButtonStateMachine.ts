@@ -25,7 +25,9 @@ export const ALL_SEMANTIC_CONTROLS: SemanticControl[] = [
   'DPAD_DOWN',
   'DPAD_LEFT',
   'MENU',
-  'VIEW'
+  'VIEW',
+  'PADDLE_LEFT',
+  'PADDLE_RIGHT'
 ];
 
 export function createInitialButtonMap(): Record<SemanticControl, ButtonState> {

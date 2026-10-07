@@ -25,6 +25,7 @@ export type ControllerIntent =
   | { type: 'VIDEO_CONTROL_TOGGLE' }
   | { type: 'VIDEO_CONTROL_CYCLE_RATE' }
   | { type: 'TOGGLE_FOCUS_MODE' }
+  | { type: 'TOGGLE_RALLY_HISTORY' }
   | {
       type: 'VIDEO_ANALOG_SEEK';
       deltaMs: number;

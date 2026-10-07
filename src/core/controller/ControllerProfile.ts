@@ -17,7 +17,9 @@ export const STANDARD_MAPPING: Record<SemanticControl, number> = {
   DPAD_UP: 12,
   DPAD_DOWN: 13,
   DPAD_LEFT: 14,
-  DPAD_RIGHT: 15
+  DPAD_RIGHT: 15,
+  PADDLE_LEFT: 18,
+  PADDLE_RIGHT: 19
 };
 
 function immutableProfile(profile: ControllerProfile): ControllerProfile {
@@ -236,7 +238,8 @@ export function getControllerGlyph(control: SemanticControl, _type: ControllerTy
     FACE_SOUTH: 'A', FACE_EAST: 'B', FACE_WEST: 'X', FACE_NORTH: 'Y',
     LEFT_BUMPER: 'LB', RIGHT_BUMPER: 'RB', LEFT_TRIGGER: 'LT', RIGHT_TRIGGER: 'RT',
     DPAD_UP: '↑', DPAD_RIGHT: '→', DPAD_DOWN: '↓', DPAD_LEFT: '←',
-    VIEW: 'View', MENU: 'Menu', LEFT_STICK_BUTTON: 'L3', RIGHT_STICK_BUTTON: 'R3'
+    VIEW: 'View', MENU: 'Menu', LEFT_STICK_BUTTON: 'L3', RIGHT_STICK_BUTTON: 'R3',
+    PADDLE_LEFT: 'ML', PADDLE_RIGHT: 'MR'
   };
   return glyphs[control];
 }

@@ -44,7 +44,8 @@ export type LiveScoutIntentRoute =
   | 'OPEN_RADIAL_RESULT'
   | 'OPEN_RADIAL_TEAM'
   | 'OPEN_RADIAL_PLAYER'
-  | 'TOGGLE_FOCUS_MODE';
+  | 'TOGGLE_FOCUS_MODE'
+  | 'SCOUT_TOGGLE_RALLY_HISTORY';
 
 const RADIAL_OPEN_ROUTES: Record<RadialCategory, LiveScoutIntentRoute> = {
   SKILL: 'OPEN_RADIAL_SKILL',
@@ -138,6 +139,7 @@ export function routeLiveScoutIntent(
     case 'CLEAR_CURRENT_ACTION': return 'SCOUT_CLEAR_ACTION';
     case 'TOGGLE_VIDEO_PLAYBACK': return 'SCOUT_TOGGLE_VIDEO';
     case 'TOGGLE_FOCUS_MODE': return 'TOGGLE_FOCUS_MODE';
+    case 'TOGGLE_RALLY_HISTORY': return 'SCOUT_TOGGLE_RALLY_HISTORY';
     case 'VIDEO_ANALOG_SEEK':
     case 'VIDEO_SEEK_STARTED':
     case 'VIDEO_SEEK_ENDED':

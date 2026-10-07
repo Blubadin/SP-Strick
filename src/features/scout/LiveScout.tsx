@@ -89,6 +89,7 @@ export function LiveScout() {
   const [interactionContext, setInteractionContext] = useState<LiveScoutInteractionContext>('DISCONNECTED');
   const [focusMode, setFocusMode] = useState(false);
   const [hudHidden, setHudHidden] = useState(false);
+  const [hudRallyDrawerOpen, setHudRallyDrawerOpen] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(() => videoPlayback.isPlaying());
   const [videoSourceId, setVideoSourceId] = useState(() => videoPlayback.getEventTiming().videoSourceId);
   const focusHudTimerRef = useRef<number | null>(null);
@@ -150,6 +151,7 @@ export function LiveScout() {
       if (!next) {
         clearFocusHudTimer();
         setHudHidden(false);
+        setHudRallyDrawerOpen(false);
       } else {
         setHudHidden(false);
       }
@@ -427,32 +429,37 @@ export function LiveScout() {
   }, [clearFocusHudTimer, focusMode, videoPlaying]);
 
   useEffect(() => {
-    if (focusMode && videoPlaying && !hudHidden) scheduleFocusHudHide();
+    if (focusMode && videoPlaying && !hudHidden && !hudRallyDrawerOpen) scheduleFocusHudHide();
     else clearFocusHudTimer();
     return clearFocusHudTimer;
-  }, [focusMode, videoPlaying, hudHidden, scheduleFocusHudHide, clearFocusHudTimer]);
+  }, [focusMode, videoPlaying, hudHidden, hudRallyDrawerOpen, scheduleFocusHudHide, clearFocusHudTimer]);
 
   useEffect(() => {
     if (!focusMode) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (hudRallyDrawerOpen) {
+          setHudRallyDrawerOpen(false);
+          return;
+        }
         setFocusMode(false);
         setHudHidden(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [focusMode]);
+  }, [focusMode, hudRallyDrawerOpen]);
 
   const revealFocusHud = useCallback(() => {
     if (!focusMode) return;
     setHudHidden(false);
-    scheduleFocusHudHide();
-  }, [focusMode, scheduleFocusHudHide]);
+    if (!hudRallyDrawerOpen) scheduleFocusHudHide();
+  }, [focusMode, hudRallyDrawerOpen, scheduleFocusHudHide]);
   const exitFocusMode = useCallback(() => {
     clearFocusHudTimer();
     setFocusMode(false);
     setHudHidden(false);
+    setHudRallyDrawerOpen(false);
   }, [clearFocusHudTimer]);
 
   // D-pad intents are translated above; the stick navigates the active modal at a steady repeat rate.
@@ -679,7 +686,23 @@ export function LiveScout() {
       }
       case 'SCOUT_UNDO': void scout.undoLastEvent(); break;
       case 'SCOUT_BOOKMARK': void scout.addBookmark(); break;
-      case 'SCOUT_CLEAR_ACTION': void useScoutStore.getState().clearCurrentEvent(); setInspectedEvent(null); break;
+      case 'SCOUT_CLEAR_ACTION': {
+        void useScoutStore.getState().clearCurrentEvent();
+        setInspectedEvent(null);
+        triggerActionFlash(t('scout.action', 'ACTION'), t('scout.cleared', 'CLEARED'));
+        break;
+      }
+      case 'SCOUT_TOGGLE_RALLY_HISTORY': {
+        setHudRallyDrawerOpen((prev) => {
+          const next = !prev;
+          triggerActionFlash(
+            t('scout.hud_rally_history', 'RALLIES'),
+            next ? t('scout.opened', 'OPENED') : t('scout.closed', 'CLOSED')
+          );
+          return next;
+        });
+        break;
+      }
       case 'SCOUT_TOGGLE_VIDEO': videoPlayback.togglePlayback(); break;
       case 'TOGGLE_FOCUS_MODE': toggleFocusMode(); break;
       case 'ENTER_VIDEO_CONTROL':
@@ -993,6 +1016,15 @@ export function LiveScout() {
               <strong>{scout.activeTeam} · {scout.activeTeam === 'A' ? scout.teamA : scout.teamB} · {focusPlayerLabel} · {scout.currentEvent.skill ? t(skillKey(scout.currentEvent.skill)) : t('scout.skill', 'Skill') + ' —'} · {scout.currentEvent.originZone ? `Z${scout.currentEvent.originZone}` : t('scout.zone', 'Zone') + ' —'} · {scout.currentEvent.evaluation !== undefined ? scout.currentEvent.evaluation > 0 ? '+1' : scout.currentEvent.evaluation === 0 ? t('result.pass', 'Pass') : '−1' : t('scout.result', 'Result') + ' —'}</strong>
             </div>
             <button className={styles.focusExit} type="button" onClick={exitFocusMode}>{t('scout.exit_focus', 'Exit focus mode')}</button>
+            <button
+              className={`${styles.focusRallyToggle} ${hudRallyDrawerOpen ? styles.focusActive : ''}`}
+              type="button"
+              onClick={() => setHudRallyDrawerOpen((prev) => !prev)}
+              aria-label={t('scout.hud_rally_history', 'Rallies & Sequences')}
+            >
+              <ControllerGlyph control="PADDLE_LEFT" size="small" />
+              <span>{t('scout.rallies_short', 'Rallies')}</span>
+            </button>
             {!videoSourceId && <div className={styles.focusEmpty}>{t('video.focus_empty', 'Add a video or continue scouting without one.')}</div>}
           </>}
 
@@ -1005,6 +1037,49 @@ export function LiveScout() {
               onToggleFocus={toggleFocusMode}
             />
           </div>
+
+          {/* HUD Rally & Sequence History Drawer (Toggled via ML or click) */}
+          {focusMode && hudRallyDrawerOpen && (
+            <div className={styles.hudRallyDrawer} role="dialog" aria-modal="true" aria-label={t('scout.hud_rally_history', 'Rallies & Sequences')}>
+              <div className={styles.hudRallyDrawerHeader}>
+                <div className={styles.hudRallyDrawerTitle}>
+                  <ControllerGlyph control="PADDLE_LEFT" size="small" />
+                  <span>{t('scout.hud_rally_history', 'Rallies & Sequences')}</span>
+                </div>
+                <div className={styles.hudRallyDrawerActions}>
+                  <button
+                    type="button"
+                    className={styles.hudUndoBtn}
+                    onClick={() => scout.undoLastEvent()}
+                    title={t('scout.undo_action', 'Undo last event')}
+                  >
+                    <ControllerGlyph control="DPAD_LEFT" size="small" />
+                    <span>{t('scout.undo_short', 'Undo')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.hudCloseBtn}
+                    onClick={() => setHudRallyDrawerOpen(false)}
+                    aria-label={t('scout.close', 'Close')}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className={styles.hudRallyDrawerBody}>
+                <RallyHistory
+                  events={scout.allEvents}
+                  teamA={scout.teamA}
+                  teamB={scout.teamB}
+                  teamAPlayers={scout.teamAPlayers}
+                  teamBPlayers={scout.teamBPlayers}
+                  selectedEventId={inspected?.id}
+                  onInspect={inspectAction}
+                  incompleteRallyIds={scout.rallies.filter((rally) => rally.status === 'incomplete').map((rally) => rally.id)}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Full Two-Sided Court Heatmap */}
           {!focusMode && <>
@@ -1239,6 +1314,16 @@ export function LiveScout() {
           </button>
           <button type="button" className={styles.shortcutItem} onClick={() => setQuickEditOpen(true)}>
             <ControllerGlyph control="LEFT_STICK_BUTTON" /> {t('scout.edit_last_short', 'Edit Last')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => setHudRallyDrawerOpen((prev) => !prev)}>
+            <ControllerGlyph control="PADDLE_LEFT" /> {t('scout.rallies_short', 'Rallies')}
+          </button>
+          <button type="button" className={styles.shortcutItem} onClick={() => {
+            void useScoutStore.getState().clearCurrentEvent();
+            setInspectedEvent(null);
+            triggerActionFlash(t('scout.action', 'ACTION'), t('scout.cleared', 'CLEARED'));
+          }}>
+            <ControllerGlyph control="PADDLE_RIGHT" /> {t('scout.clear_short', 'Clear')}
           </button>
           <button type="button" className={styles.shortcutItem} onClick={() => scout.addBookmark()}>
             <ControllerGlyph control="RIGHT_STICK_BUTTON" /> 🔖

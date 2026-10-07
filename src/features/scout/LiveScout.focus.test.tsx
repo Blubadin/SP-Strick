@@ -198,4 +198,50 @@ describe('LiveScout focus mode', () => {
     act(() => intentDispatcher.dispatch({ type: 'TOGGLE_FOCUS_MODE' }));
     expect(liveSurface.getAttribute('data-focus-mode')).toBe('false');
   });
+
+  it('toggles HUD rally drawer via TOGGLE_RALLY_HISTORY intent and closes on Escape before exiting focus mode', () => {
+    useControllerStore.setState((state) => ({ state: { ...state.state, connected: true } }));
+    renderLiveScout();
+    const liveSurface = screen.getByTestId('live-scout-surface');
+
+    // Enter focus mode
+    act(() => intentDispatcher.dispatch({ type: 'TOGGLE_FOCUS_MODE' }));
+    expect(liveSurface.getAttribute('data-focus-mode')).toBe('true');
+    expect(screen.queryByRole('dialog', { name: 'Rallies & Sequences' })).toBeNull();
+
+    // Open drawer via ML (TOGGLE_RALLY_HISTORY)
+    act(() => intentDispatcher.dispatch({ type: 'TOGGLE_RALLY_HISTORY' }));
+    expect(screen.getByRole('dialog', { name: 'Rallies & Sequences' })).toBeTruthy();
+    expect(screen.getByTestId('rally-history')).toBeTruthy();
+
+    // First Escape closes drawer, keeps focus mode active
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Rallies & Sequences' })).toBeNull();
+    expect(liveSurface.getAttribute('data-focus-mode')).toBe('true');
+
+    // Second Escape exits focus mode
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(liveSurface.getAttribute('data-focus-mode')).toBe('false');
+  });
+
+  it('clears current draft action via CLEAR_CURRENT_ACTION intent', async () => {
+    useControllerStore.setState((state) => ({ state: { ...state.state, connected: true } }));
+    useScoutStore.setState({
+      activeTeam: 'A',
+      selectedPlayerId: 'p1',
+      currentEvent: { teamId: 'A', playerId: 'p1', skill: 'attack', originZone: 4, evaluation: 1 }
+    });
+    renderLiveScout();
+
+    expect(useScoutStore.getState().currentEvent.skill).toBe('attack');
+
+    await act(async () => {
+      intentDispatcher.dispatch({ type: 'CLEAR_CURRENT_ACTION' });
+      await Promise.resolve();
+    });
+    expect(useScoutStore.getState().currentEvent.skill).toBeUndefined();
+    expect(useScoutStore.getState().currentEvent.originZone).toBeUndefined();
+    expect(useScoutStore.getState().currentEvent.evaluation).toBeUndefined();
+  });
 });
+

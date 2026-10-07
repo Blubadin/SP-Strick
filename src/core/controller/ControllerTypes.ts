@@ -4,7 +4,8 @@ export type SemanticControl =
   | 'LEFT_TRIGGER' | 'RIGHT_TRIGGER'
   | 'LEFT_STICK_BUTTON' | 'RIGHT_STICK_BUTTON'
   | 'DPAD_UP' | 'DPAD_RIGHT' | 'DPAD_DOWN' | 'DPAD_LEFT'
-  | 'MENU' | 'VIEW';
+  | 'MENU' | 'VIEW'
+  | 'PADDLE_LEFT' | 'PADDLE_RIGHT';
 
 export type ControllerType = 'xbox' | 'dualsense' | 'dualshock' | 'standard' | 'custom';
 

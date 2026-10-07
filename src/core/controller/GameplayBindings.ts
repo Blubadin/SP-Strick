@@ -16,7 +16,8 @@ export type GameplayAction =
   | 'TOGGLE_VIDEO_PLAYBACK'
   | 'PAUSE_SESSION'
   | 'EDIT_LAST_EVENT'
-  | 'BOOKMARK_MOMENT';
+  | 'BOOKMARK_MOMENT'
+  | 'TOGGLE_RALLY_HISTORY';
 
 export type GameplayBindings = Record<SemanticControl, GameplayAction>;
 
@@ -36,7 +37,9 @@ export const DEFAULT_GAMEPLAY_BINDINGS: GameplayBindings = Object.freeze({
   VIEW: 'TOGGLE_FOCUS_MODE',
   MENU: 'PAUSE_SESSION',
   LEFT_STICK_BUTTON: 'EDIT_LAST_EVENT',
-  RIGHT_STICK_BUTTON: 'BOOKMARK_MOMENT'
+  RIGHT_STICK_BUTTON: 'BOOKMARK_MOMENT',
+  PADDLE_LEFT: 'TOGGLE_RALLY_HISTORY',
+  PADDLE_RIGHT: 'CLEAR_CURRENT_ACTION'
 });
 
 export const GAMEPLAY_ACTIONS: readonly GameplayAction[] = Object.freeze([
@@ -57,7 +60,8 @@ export const GAMEPLAY_ACTIONS: readonly GameplayAction[] = Object.freeze([
   'TOGGLE_VIDEO_PLAYBACK',
   'PAUSE_SESSION',
   'EDIT_LAST_EVENT',
-  'BOOKMARK_MOMENT'
+  'BOOKMARK_MOMENT',
+  'TOGGLE_RALLY_HISTORY'
 ]);
 
 export const GAMEPLAY_ACTION_LABELS: Record<GameplayAction, string> = {
@@ -78,7 +82,8 @@ export const GAMEPLAY_ACTION_LABELS: Record<GameplayAction, string> = {
   TOGGLE_VIDEO_PLAYBACK: 'Play / pause video',
   PAUSE_SESSION: 'Pause session',
   EDIT_LAST_EVENT: 'Edit last event',
-  BOOKMARK_MOMENT: 'Bookmark'
+  BOOKMARK_MOMENT: 'Bookmark',
+  TOGGLE_RALLY_HISTORY: 'Rally history (HUD)'
 };
 
 export function migrateGameplayBindings(raw: unknown): GameplayBindings {

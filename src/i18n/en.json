@@ -480,5 +480,16 @@
   "controller.gameplay.TOGGLE_VIDEO_PLAYBACK": "Play / pause video",
   "controller.gameplay.PAUSE_SESSION": "Pause session",
   "controller.gameplay.EDIT_LAST_EVENT": "Edit latest action",
-  "controller.gameplay.BOOKMARK_MOMENT": "Bookmark moment"
+  "controller.gameplay.BOOKMARK_MOMENT": "Bookmark moment",
+  "controller.gameplay.TOGGLE_RALLY_HISTORY": "Rally history (HUD)",
+  "controller.paddle_left": "ML (Back Left)",
+  "controller.paddle_right": "MR (Back Right)",
+  "scout.cleared": "CLEARED",
+  "scout.action": "ACTION",
+  "scout.hud_rally_history": "Rallies & Sequences",
+  "scout.rallies_short": "Rallies",
+  "scout.clear_short": "Clear",
+  "scout.close": "Close",
+  "scout.opened": "OPENED",
+  "scout.closed": "CLOSED"
 }
